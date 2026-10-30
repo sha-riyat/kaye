@@ -1,0 +1,30 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "100000000000001",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550000000",
+              "phone_number_id": "200000000000002"
+            },
+            "contacts": [{ "profile": { "name": "Maman Ama" }, "wa_id": "22890000001" }],
+            "messages": [
+              {
+                "from": "22890000001",
+                "id": "wamid.TEST_TEXT_0001",
+                "timestamp": "1793361600",
+                "type": "text",
+                "text": { "body": "J'ai vendu 3 sacs de riz à Ama" }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
