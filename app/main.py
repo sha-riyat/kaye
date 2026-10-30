@@ -13,7 +13,7 @@ from fastapi.responses import PlainTextResponse
 
 from app.config import Settings, get_settings
 from app.dedup import Deduplicator, InMemoryDeduplicator
-from app.webhook import InboundMessage, parse_messages, verify_signature
+from app.webhook import InboundMessage, parse_messages, parse_statuses, verify_signature
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +56,12 @@ def create_app(
             payload = json.loads(body)
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="invalid json") from None
+
+        for status in parse_statuses(payload):
+            if status.get("status") == "failed":
+                log.warning("message %s failed: %s", status.get("id"), status.get("errors"))
+            else:
+                log.info("message %s %s", status.get("id"), status.get("status"))
 
         for msg in parse_messages(payload):
             if not await dedup.claim(msg.wamid):

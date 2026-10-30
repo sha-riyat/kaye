@@ -51,6 +51,19 @@ def parse_messages(payload: dict[str, Any]) -> list[InboundMessage]:
     return messages
 
 
+def parse_statuses(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Delivery statuses of our outgoing messages (sent, delivered, read, failed + errors)."""
+    if payload.get("object") != "whatsapp_business_account":
+        return []
+    return [
+        status
+        for entry in payload.get("entry", [])
+        for change in entry.get("changes", [])
+        if change.get("field") == "messages"
+        for status in change.get("value", {}).get("statuses", [])
+    ]
+
+
 def _normalize(msg: dict[str, Any], phone_number_id: str, profile_name: str | None) -> InboundMessage:
     raw_type = msg.get("type", "")
     fields: dict[str, Any] = {"type": "unsupported"}

@@ -1,8 +1,12 @@
 """Minimal WhatsApp Cloud API client."""
 
+import logging
+
 import httpx
 
 from app.config import Settings
+
+log = logging.getLogger(__name__)
 
 
 class WhatsAppError(Exception):
@@ -50,7 +54,9 @@ class WhatsAppClient:
         if reply_to:
             payload["context"] = {"message_id": reply_to}
         data = await self._post(payload)
-        return data["messages"][0]["id"]
+        wamid = data["messages"][0]["id"]
+        log.info("sent %s to %s", wamid, to)
+        return wamid
 
     async def mark_read(self, wamid: str) -> None:
         await self._post({"messaging_product": "whatsapp", "status": "read", "message_id": wamid})

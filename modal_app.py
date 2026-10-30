@@ -20,12 +20,15 @@ secrets = [modal.Secret.from_name("kaye-secrets")]
 # No automatic retries: a retried job could send the same reply (or later, write the same entry) twice.
 @app.function(image=image, secrets=secrets, timeout=300)
 async def process_message(message: dict) -> None:
+    import logging
+
     from app.config import get_settings
     from app.router import handle_message
     from app.transcribe import Transcriber
     from app.webhook import InboundMessage
     from app.whatsapp import WhatsAppClient
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     settings = get_settings()
     wa, transcriber = WhatsAppClient(settings), Transcriber(settings)
     try:
@@ -46,7 +49,7 @@ def web():
     from app.main import create_app
     from app.webhook import InboundMessage
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     settings = get_settings()
 
     if settings.database_url:
