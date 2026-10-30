@@ -15,6 +15,10 @@ media/
 *.ogg
 *.opus
 
+# CLI caches
+.wrangler/
+supabase/.temp/
+
 # Editors / OS
 .idea/
 .vscode/
