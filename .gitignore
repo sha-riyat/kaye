@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Local media (real merchant data never goes in the repo)
+media/
+*.ogg
+*.opus
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
