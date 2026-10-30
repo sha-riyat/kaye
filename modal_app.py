@@ -41,13 +41,22 @@ async def process_message(message: dict) -> None:
 def web():
     import logging
 
-    from app.dedup import ModalDictDeduplicator
+    from app.config import get_settings
+    from app.dedup import ModalDictDeduplicator, PostgresDeduplicator
     from app.main import create_app
     from app.webhook import InboundMessage
 
     logging.basicConfig(level=logging.INFO)
+    settings = get_settings()
+
+    if settings.database_url:
+        from app.db.engine import Database
+
+        dedup = PostgresDeduplicator(Database(settings.database_url))
+    else:
+        dedup = ModalDictDeduplicator()
 
     async def dispatch(msg: InboundMessage) -> None:
         await process_message.spawn.aio(msg.model_dump())
 
-    return create_app(dispatch=dispatch, dedup=ModalDictDeduplicator())
+    return create_app(dispatch=dispatch, settings=settings, dedup=dedup)

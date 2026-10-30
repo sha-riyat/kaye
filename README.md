@@ -36,6 +36,21 @@ uv run modal secret create kaye-secrets --from-dotenv .env --force
 uv run modal serve modal_app.py # public HTTPS URL with hot reload
 ```
 
+Database (Supabase Postgres, transaction pooler on port 6543):
+
+```bash
+uv run alembic upgrade head     # uses DATABASE_URL from .env
+
+# Ledger tests run against a real Postgres:
+docker run -d --name kaye-pg -e POSTGRES_PASSWORD=kaye -p 127.0.0.1:54329:5432 postgres:17
+docker exec kaye-pg psql -U postgres -c "create database kaye_test"
+TEST_DATABASE_URL=postgresql://postgres:kaye@127.0.0.1:54329/kaye_test uv run pytest
+```
+
+Balances are never stored: they are summed from ledger entries, and a correction inserts a
+reversing entry instead of deleting anything, so every figure traces back to the message that
+created it.
+
 Then in the Meta dashboard (WhatsApp → Configuration → Webhook), set the callback URL to
 `https://<your-modal-url>/webhook`, the verify token to `WHATSAPP_VERIFY_TOKEN`, and subscribe to the
 `messages` field.

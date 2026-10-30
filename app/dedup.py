@@ -22,6 +22,28 @@ class InMemoryDeduplicator:
         return True
 
 
+class PostgresDeduplicator:
+    """Dedup through the `processed_message` table (atomic insert-if-absent)."""
+
+    def __init__(self, db) -> None:  # app.db.engine.Database, imported lazily to keep the webhook light
+        self._db = db
+
+    async def claim(self, wamid: str) -> bool:
+        from sqlalchemy.dialects.postgresql import insert
+
+        from app.db.models import ProcessedMessage
+
+        stmt = (
+            insert(ProcessedMessage)
+            .values(wamid=wamid)
+            .on_conflict_do_nothing(index_elements=["wamid"])
+            .returning(ProcessedMessage.wamid)
+        )
+        async with self._db.session() as session:
+            result = await (await session.connection()).execute(stmt)
+            return result.first() is not None
+
+
 class ModalDictDeduplicator:
     """Dedup shared across Modal containers, using an atomic put-if-absent on a modal.Dict."""
 
