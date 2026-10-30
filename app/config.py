@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # Meta models
     meta_model_api_key: str = ""
     meta_model_base_url: str = "https://api.meta.ai/v1"
+    transcribe_model: str = "muse-voice-transcribe-1.0"
     spark_open_base_url: str = ""
     spark_open_api_key: str = ""
     spark_open_model: str = ""

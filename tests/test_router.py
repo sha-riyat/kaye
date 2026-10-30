@@ -4,12 +4,17 @@ import httpx
 import pytest
 import respx
 
-from app.router import UNSUPPORTED_REPLY, handle_message
+from app.router import AUDIO_ERROR_REPLY, EMPTY_AUDIO_REPLY, UNSUPPORTED_REPLY, handle_message
+from app.transcribe import Transcriber
 from app.webhook import parse_messages
-from app.whatsapp import WhatsAppClient
+from app.whatsapp import WhatsAppClient, WhatsAppError
 from tests.conftest import load_fixture
 
-MESSAGES_URL = "https://graph.facebook.com/v26.0/200000000000002/messages"
+GRAPH = "https://graph.facebook.com/v26.0"
+MESSAGES_URL = f"{GRAPH}/200000000000002/messages"
+MEDIA_URL = f"{GRAPH}/MEDIA_AUDIO_1"
+CDN_URL = "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=MEDIA_AUDIO_1"
+TRANSCRIBE_URL = "https://api.meta.ai/v1/asr/transcribe"
 
 
 @pytest.fixture
@@ -19,45 +24,112 @@ async def wa(settings):
     await client.aclose()
 
 
-def sent_payloads(route) -> list[dict]:
+@pytest.fixture
+async def transcriber(settings):
+    client = Transcriber(settings)
+    yield client
+    await client.aclose()
+
+
+@pytest.fixture
+def sent():
+    return respx.post(MESSAGES_URL).mock(
+        return_value=httpx.Response(200, json={"messages": [{"id": "wamid.OUT"}], "success": True})
+    )
+
+
+def text_msg():
+    return parse_messages(json.loads(load_fixture("text_message.json")))[0]
+
+
+def audio_msg():
+    return parse_messages(json.loads(load_fixture("mixed_messages.json")))[0]
+
+
+def image_msg():
+    return parse_messages(json.loads(load_fixture("mixed_messages.json")))[1]
+
+
+def payloads(route) -> list[dict]:
     return [json.loads(call.request.content) for call in route.calls]
 
 
-@respx.mock
-async def test_text_is_echoed_after_mark_read(wa):
-    route = respx.post(MESSAGES_URL).mock(
-        return_value=httpx.Response(200, json={"messages": [{"id": "wamid.OUT"}], "success": True})
+def mock_media(audio: bytes):
+    respx.get(MEDIA_URL).mock(
+        return_value=httpx.Response(200, json={"url": CDN_URL, "mime_type": "audio/ogg; codecs=opus"})
     )
-    msg = parse_messages(json.loads(load_fixture("text_message.json")))[0]
+    return respx.get(CDN_URL).mock(return_value=httpx.Response(200, content=audio))
 
-    await handle_message(msg, wa)
 
-    read, reply = sent_payloads(route)
+@respx.mock
+async def test_text_is_echoed_after_mark_read(wa, transcriber, sent):
+    msg = text_msg()
+    await handle_message(msg, wa, transcriber)
+
+    read, reply = payloads(sent)
     assert read == {"messaging_product": "whatsapp", "status": "read", "message_id": msg.wamid}
     assert reply["to"] == "22890000001"
     assert reply["text"]["body"] == "Reçu : J'ai vendu 3 sacs de riz à Ama"
     assert reply["context"] == {"message_id": msg.wamid}
-    assert route.calls[0].request.headers["authorization"] == "Bearer test-token"
+    assert sent.calls[0].request.headers["authorization"] == "Bearer test-token"
 
 
 @respx.mock
-async def test_non_text_gets_unsupported_reply(wa):
-    route = respx.post(MESSAGES_URL).mock(
-        return_value=httpx.Response(200, json={"messages": [{"id": "wamid.OUT"}]})
+async def test_voice_note_is_downloaded_transcribed_and_echoed(wa, transcriber, sent, voice_note_ogg):
+    cdn = mock_media(voice_note_ogg)
+    respx.post(TRANSCRIBE_URL).mock(
+        return_value=httpx.Response(
+            200, json={"transcript": "Ama me doit 5 000 francs", "audioDurationMs": 3000}
+        )
     )
-    audio = parse_messages(json.loads(load_fixture("mixed_messages.json")))[0]
 
-    await handle_message(audio, wa)
+    await handle_message(audio_msg(), wa, transcriber)
 
-    assert sent_payloads(route)[1]["text"]["body"] == UNSUPPORTED_REPLY
+    assert cdn.calls[0].request.headers["authorization"] == "Bearer test-token"
+    assert payloads(sent)[1]["text"]["body"] == "🎙️ J'ai compris : « Ama me doit 5 000 francs »"
 
 
 @respx.mock
-async def test_api_error_is_raised(wa):
-    from app.whatsapp import WhatsAppError
+async def test_silent_voice_note_asks_to_resend(wa, transcriber, sent, voice_note_ogg):
+    mock_media(voice_note_ogg)
+    respx.post(TRANSCRIBE_URL).mock(
+        return_value=httpx.Response(200, json={"transcript": "", "audioDurationMs": 1000})
+    )
 
+    await handle_message(audio_msg(), wa, transcriber)
+
+    assert payloads(sent)[1]["text"]["body"] == EMPTY_AUDIO_REPLY
+
+
+@respx.mock
+async def test_media_download_failure_gets_polite_reply(wa, transcriber, sent):
+    respx.get(MEDIA_URL).mock(return_value=httpx.Response(404, json={"error": {}}))
+
+    await handle_message(audio_msg(), wa, transcriber)
+
+    assert payloads(sent)[1]["text"]["body"] == AUDIO_ERROR_REPLY
+
+
+@respx.mock
+async def test_transcription_failure_gets_polite_reply(wa, transcriber, sent, voice_note_ogg):
+    mock_media(voice_note_ogg)
+    respx.post(TRANSCRIBE_URL).mock(return_value=httpx.Response(500))
+
+    await handle_message(audio_msg(), wa, transcriber)
+
+    assert payloads(sent)[1]["text"]["body"] == AUDIO_ERROR_REPLY
+
+
+@respx.mock
+async def test_image_gets_unsupported_reply(wa, transcriber, sent):
+    await handle_message(image_msg(), wa, transcriber)
+
+    assert payloads(sent)[1]["text"]["body"] == UNSUPPORTED_REPLY
+
+
+@respx.mock
+async def test_send_error_is_raised(wa, transcriber):
     respx.post(MESSAGES_URL).mock(return_value=httpx.Response(401, json={"error": {"code": 190}}))
-    msg = parse_messages(json.loads(load_fixture("text_message.json")))[0]
 
     with pytest.raises(WhatsAppError):
-        await handle_message(msg, wa)
+        await handle_message(text_msg(), wa, transcriber)

@@ -10,6 +10,7 @@ app = modal.App("kaye")
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
+    .apt_install("ffmpeg")
     .uv_sync(extra_options="--no-dev")
     .add_local_python_source("app")
 )
@@ -21,14 +22,17 @@ secrets = [modal.Secret.from_name("kaye-secrets")]
 async def process_message(message: dict) -> None:
     from app.config import get_settings
     from app.router import handle_message
+    from app.transcribe import Transcriber
     from app.webhook import InboundMessage
     from app.whatsapp import WhatsAppClient
 
-    wa = WhatsAppClient(get_settings())
+    settings = get_settings()
+    wa, transcriber = WhatsAppClient(settings), Transcriber(settings)
     try:
-        await handle_message(InboundMessage.model_validate(message), wa)
+        await handle_message(InboundMessage.model_validate(message), wa, transcriber)
     finally:
         await wa.aclose()
+        await transcriber.aclose()
 
 
 @app.function(image=image, secrets=secrets)

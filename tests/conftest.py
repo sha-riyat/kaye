@@ -1,6 +1,8 @@
 import hashlib
 import hmac
 import json
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -21,7 +23,22 @@ def settings() -> Settings:
         whatsapp_app_secret=APP_SECRET,
         whatsapp_verify_token=VERIFY_TOKEN,
         whatsapp_api_version="v26.0",
+        meta_model_api_key="test-meta-key",
     )
+
+
+@pytest.fixture(scope="session")
+def voice_note_ogg(tmp_path_factory) -> bytes:
+    """A 1 s OGG/Opus tone, the same container WhatsApp uses for voice notes."""
+    if not shutil.which("ffmpeg"):
+        pytest.skip("ffmpeg not installed")
+    path = tmp_path_factory.mktemp("audio") / "voice.ogg"
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+         "-ac", "1", "-ar", "48000", "-c:a", "libopus", str(path)],
+        check=True,
+    )  # fmt: skip
+    return path.read_bytes()
 
 
 def load_fixture(name: str) -> bytes:
