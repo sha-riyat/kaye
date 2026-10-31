@@ -238,7 +238,11 @@ async def _confirm(ctx: Ctx, svc: Services, pending) -> list[Reply]:
         await queries.settle_pending(ctx.session, pending, PendingStatus.CONFIRMED)
     if not texts:
         return [Reply("Cette proposition a déjà été traitée.")]
-    return [Reply("\n".join(texts)), *receipts]
+    replies = [Reply("\n".join(texts)), *receipts]
+    if pending.payload.get("then_summary"):
+        await ctx.session.flush()
+        replies.append(Reply(await actions.summary_text(ctx.session, ctx.shop, "today", ctx.now)))
+    return replies
 
 
 async def _receipt_reply(ctx: Ctx, svc: Services, entry_id: int) -> Reply:

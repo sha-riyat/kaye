@@ -14,6 +14,8 @@ image = (
     .uv_sync(extra_options="--no-dev")
     .add_local_python_source("app")
     .add_local_dir("assets/brand", remote_path="/root/assets/brand")
+    # add_local_python_source only ships .py files: the document templates need their own mount
+    .add_local_dir("app/documents/templates", remote_path="/root/app/documents/templates")
 )
 secrets = [modal.Secret.from_name("kaye-secrets")]
 

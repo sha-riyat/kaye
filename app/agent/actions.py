@@ -45,6 +45,7 @@ class Ctx:
     media_id: int | None = None
     text: str = ""  # what the merchant said (or the voice transcript)
     replaying: bool = False  # this message answers our question: its other operations were proposed already
+    summary_after: bool = False  # the merchant asked for a summary in the same message: send it after "Oui"
     now: datetime = field(default_factory=queries.utcnow)
 
 
@@ -209,6 +210,11 @@ async def merge(ctx: Ctx, replies: list[Reply]) -> list[Reply]:
         pending_id = batch.id
     if missing:
         recap += f"\n\n{missing}\n_Répondez quand vous voulez. Le reste peut être noté tout de suite._"
+    if ctx.summary_after:
+        recap_pending = await queries.get_pending(ctx.session, ctx.shop.id, pending_id)
+        recap_pending.payload = {**recap_pending.payload, "then_summary": True}
+        ctx.session.add(recap_pending)
+        recap += "\n\n_Votre bilan suivra dès que c'est noté._"
     ask = "\n\nJe note ?" if len(proposals) == 1 else "\n\nJe note tout ?"
     return others + [Reply(recap + ask, buttons=confirm_buttons(pending_id), kind="proposal")]
 

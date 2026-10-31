@@ -624,3 +624,13 @@ async def test_recent_turns_are_given_to_the_model(chat, models):
     history = models.calls[-1]["messages"][1:-1]
     assert {"role": "user", "content": "salut"} in history
     assert {"role": "assistant", "content": "Bonjour ! Que puis-je noter ?"} in history
+
+
+async def test_a_summary_asked_with_operations_comes_after_the_yes(chat):
+    expense = ("propose_expense", {"amount": 5_000, "label": "transport"})
+    recap = await chat.say("transport 5 000 et fais-moi le bilan", [SALE, expense, ("summary", {"period": "today"})])
+    assert len(recap) == 1 and "bilan suivra" in recap[0].text
+    done = await chat.tap(recap[0].buttons[0][0])
+    assert (
+        "Bilan du jour" in done[-1].text and "Ventes : *33 000" in done[-1].text and "Sorties : 5 000" in done[-1].text
+    )

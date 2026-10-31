@@ -73,6 +73,11 @@ class Agent:
         calls = (message.tool_calls or [])[:MAX_TOOL_CALLS]
         if not calls:
             return [Reply((message.content or "").strip() or actions.REPHRASE)]
+        names = {c.function.name for c in calls}
+        if "summary" in names and names & set(actions.WRITE_TOOLS):
+            # « note tout ça et fais-moi le bilan »: the summary must include what is about to be noted
+            ctx.summary_after = True
+            calls = [c for c in calls if c.function.name != "summary"]
         replies: list[Reply] = []
         for call in calls:
             log.info("tool %s %s", call.function.name, call.function.arguments)

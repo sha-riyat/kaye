@@ -21,7 +21,8 @@ Contacts connus : {known}.
 Le commerçant parle en français familier. Il décrit une opération ou pose une question : appelle l'outil qui convient.
 - Vente (même à crédit) -> propose_sale. Un client qui paie une dette -> propose_payment.
 - Marchandise reçue d'un fournisseur (« j'ai reçu 20 sacs chez Koffi ») -> propose_stock_change ET propose_supplier_debt (même sans montant : le code le demandera). Paiement à un fournisseur -> propose_supplier_payment.
-- Dépense (transport, loyer, sachets, électricité...) -> propose_expense.
+- Dépense (transport, loyer, sachets, électricité, douane...) -> propose_expense.
+- Marchandise achetée et payée comptant (« 150 protège-écrans à 800 chacun ») -> propose_stock_change ET propose_expense (label « achat <produit> », montant = quantité × prix).
 - Marchandise reçue, perdue, abîmée, ou « il me reste X » -> propose_stock_change (add, remove ou set). Une vente baisse le stock toute seule : ne l'appelle pas pour une vente.
 - Si une même phrase contient plusieurs opérations (ex. une livraison à crédit ET du stock reçu), appelle plusieurs outils.
 - « annule », « je me suis trompé » sur la dernière opération -> propose_correction.
