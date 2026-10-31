@@ -128,6 +128,19 @@ async def test_image_gets_unsupported_reply(wa, transcriber, sent):
 
 
 @respx.mock
+async def test_reply_goes_out_from_the_number_that_received_the_message(wa, transcriber, sent):
+    other = respx.post(f"{GRAPH}/999000000000009/messages").mock(
+        return_value=httpx.Response(200, json={"messages": [{"id": "wamid.OUT"}]})
+    )
+    msg = text_msg().model_copy(update={"phone_number_id": "999000000000009"})
+
+    await handle_message(msg, wa, transcriber)
+
+    assert len(other.calls) == 2  # mark read + reply
+    assert sent.calls == []  # nothing from the default number
+
+
+@respx.mock
 async def test_send_error_is_raised(wa, transcriber):
     respx.post(MESSAGES_URL).mock(return_value=httpx.Response(401, json={"error": {"code": 190}}))
 

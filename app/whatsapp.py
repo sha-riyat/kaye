@@ -14,11 +14,24 @@ class WhatsAppError(Exception):
 
 
 class WhatsAppClient:
-    def __init__(self, settings: Settings, http: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        http: httpx.AsyncClient | None = None,
+        phone_number_id: str | None = None,
+    ) -> None:
         self._settings = settings
         self._http = http or httpx.AsyncClient(timeout=20)
         self._base_url = f"{settings.whatsapp_graph_base_url}/{settings.whatsapp_api_version}"
-        self._messages_url = f"{self._base_url}/{settings.whatsapp_phone_number_id}/messages"
+        self.phone_number_id = phone_number_id or settings.whatsapp_phone_number_id
+        self._messages_url = f"{self._base_url}/{self.phone_number_id}/messages"
+
+    def from_number(self, phone_number_id: str) -> "WhatsAppClient":
+        """Same client sending from another of our numbers (replies go out from the number that was
+        written to). Shares the HTTP connection pool."""
+        if not phone_number_id or phone_number_id == self.phone_number_id:
+            return self
+        return WhatsAppClient(self._settings, self._http, phone_number_id)
 
     @property
     def _auth(self) -> dict[str, str]:

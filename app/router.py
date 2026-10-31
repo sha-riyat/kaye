@@ -17,6 +17,7 @@ AUDIO_ERROR_REPLY = "Désolé, je n'ai pas pu écouter ce vocal. Pouvez-vous ré
 
 async def handle_message(msg: InboundMessage, wa: WhatsAppClient, transcriber: Transcriber) -> None:
     log.info("handling %s message %s from %s", msg.type, msg.wamid, msg.sender)
+    wa = wa.from_number(msg.phone_number_id)
     await wa.mark_read(msg.wamid)
 
     if msg.type == "text" and msg.text:
