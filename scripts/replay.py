@@ -22,6 +22,7 @@ from app.agent.loop import Agent
 from app.agent.reply import Reply
 from app.config import get_settings
 from app.db.engine import Database
+from app.meta_media import MetaMedia
 from app.models_client import ModelClient
 from app.router import handle_message
 from app.services import Services
@@ -71,7 +72,9 @@ async def main(path: Path, db_url: str) -> None:
     settings = get_settings()
     db = Database(db_url)
     wa = PrintWhatsApp()
-    svc = Services(settings, wa, Transcriber(settings), db, Agent(ModelClient(settings)), storage=None)
+    svc = Services(
+        settings, wa, Transcriber(settings), db, Agent(ModelClient(settings)), storage=None, media=MetaMedia(settings)
+    )
 
     async def reset() -> None:
         async with db.engine.begin() as conn:

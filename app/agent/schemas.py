@@ -113,6 +113,14 @@ class NoArgs(BaseModel):
     """No arguments."""
 
 
+class ShelfPhoto(BaseModel):
+    """A photo of goods in stock (shelf, stack, cartons) to count them."""
+
+    product: str = Field(description="The product in the merchant's words, French, e.g. 'riz'")
+    unit: str | None = Field(default=None, description="Local unit of one item: sac, carton, bidon, boîte...")
+    object_en: str = Field(description="What one item looks like, as a short English noun: 'sack', 'carton', 'bottle'")
+
+
 class NotebookLine(BaseModel):
     customer: str = Field(description="Name written on the line")
     description: str | None = Field(default=None, description="What was bought, as written")

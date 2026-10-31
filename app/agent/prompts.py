@@ -26,6 +26,7 @@ Le commerçant parle en français familier. Il décrit une opération ou pose un
 - Marchandise reçue, perdue, abîmée, ou « il me reste X » -> propose_stock_change (add, remove ou set). Une vente baisse le stock toute seule : ne l'appelle pas pour une vente.
 - Si une même phrase contient plusieurs opérations (ex. une livraison à crédit ET du stock reçu), appelle plusieurs outils.
 - « annule », « je me suis trompé » sur la dernière opération -> propose_correction.
+- « crée / fais-moi un logo » -> create_logo.
 - Questions : customer_balance (« combien me doit Ama »), list_debtors (« qui me doit »), list_supplier_dues (« qui je dois payer »), summary (bilan), stock_levels, draft_reminder (relance).
 
 Le texte vient souvent d'un VOCAL transcrit automatiquement : il contient des « euh » et des erreurs d'écoute. Lis-le avec bon sens :
@@ -44,7 +45,8 @@ Règles :
 
 VISION_PROMPT = """Le commerçant envoie une photo. Regarde-la puis appelle l'outil qui convient :
 - une page de cahier manuscrit avec des dettes de clients -> notebook_page (chaque ligne encore due ; ignore les lignes barrées ou marquées payées ; mets unclear=true si l'écriture est difficile) ;
-- une capture ou un SMS de paiement mobile money (T-Money, Flooz / Moov Money...) -> mobile_money_receipt (montant reçu, expéditeur, référence).
+- une capture ou un SMS de paiement mobile money (T-Money, Flooz / Moov Money...) -> mobile_money_receipt (montant reçu, expéditeur, référence) ;
+- de la marchandise en stock (étagère, pile de sacs, cartons, bidons) -> shelf_photo (le produit en français, et l'objet en anglais : sack, carton, bottle, can...).
 Si ce n'est ni l'un ni l'autre, réponds en une phrase pour demander ce que c'est. Montants en FCFA entiers."""
 
 
@@ -63,5 +65,6 @@ Vous pouvez me dire, par vocal ou par écrit :
 • « Transport 3 500 »
 • « Qui me doit ? » · « Bilan » · « Il reste combien d'huile ? »
 
-Ou envoyez-moi une *photo de votre cahier* de crédits : je recopie pour vous.
+Ou envoyez-moi une *photo de votre cahier* de crédits : je recopie pour vous. Une photo de vos étagères : je compte le stock.
+Pas encore de logo ? Écrivez « crée mon logo ».
 Chaque chose est notée seulement après votre « Oui »."""

@@ -15,6 +15,7 @@ from app.agent.prompts import AFTER_NAME, DEMO_NOTICE, WELCOME
 from app.agent.reply import Reply
 from app.db import queries
 from app.db.models import Entry, EntrySource, Media, PendingStatus, Receipt, Shop
+from app.meta_media import logo_prompt
 from app.receipts import RenderError, extra_height, receipt_data, render_png, shop_card
 from app.services import Services
 from app.storage import media_key
@@ -98,9 +99,17 @@ async def _process(session, svc: Services, msg: InboundMessage, text: str | None
     if not shop.name:
         return await _name_shop(session, shop, text if msg.type in ("text", "audio") else None)
 
-    ctx = Ctx(session=session, shop=shop, user=user, wamid=msg.wamid, source=source)
+    ctx = Ctx(session=session, shop=shop, user=user, wamid=msg.wamid, source=source, media=svc.media)
     replies = await _handle(ctx, svc, msg, text, media_bytes, mime)
-    replies = [await _receipt_reply(ctx, svc, int(r.text)) if r.kind == "receipt" else r for r in replies]
+    expanded: list[Reply] = []
+    for r in replies:
+        if r.kind == "receipt":
+            expanded.append(await _receipt_reply(ctx, svc, int(r.text)))
+        elif r.kind == "logo":
+            expanded += await _logo_proposals(ctx, svc)
+        else:
+            expanded.append(r)
+    replies = expanded
     said = (
         text if msg.type in ("text", "audio") else ("[photo]" if msg.type == "image" else f"[{msg.text or 'bouton'}]")
     )
@@ -182,6 +191,34 @@ async def _save_logo(ctx: Ctx, svc: Services, data: bytes, mime: str) -> Reply:
     return Reply("Merci ! Votre logo sera sur tous vos prochains reçus. ✅")
 
 
+LOGO_COUNT = 3
+
+
+async def _logo_proposals(ctx: Ctx, svc: Services) -> list[Reply]:
+    """Three logos drawn by Muse Image; the merchant keeps one with a tap."""
+    if svc.media is None or svc.storage is None:
+        return [Reply("Je ne peux pas dessiner de logo pour le moment.")]
+    try:
+        images = await svc.media.logos(logo_prompt(ctx.shop.name), n=LOGO_COUNT)
+    except Exception:
+        log.exception("logo generation failed")
+        return [Reply("Je n'ai pas réussi à dessiner de logo. Réessayez dans un moment.")]
+    await queries.log_model_call(ctx.session, shop_id=ctx.shop.id, model="muse-image-1.0", tokens_in=0,
+                                 tokens_out=0, cost_usd=0.01 * len(images))  # fmt: skip
+    keys = []
+    for image in images:
+        key = media_key(ctx.shop.id, "logo", "image/png")
+        await svc.storage.put(key, image, "image/png")
+        keys.append(key)
+    pending = await queries.create_pending(
+        ctx.session, shop_id=ctx.shop.id, user_id=ctx.user.id, kind="logo", payload={"keys": keys}, wamid=ctx.wamid
+    )
+    replies = [Reply(f"Logo {i + 1}", image=image) for i, image in enumerate(images)]
+    buttons = [(f"logo:{pending.id}:{i}", f"Logo {i + 1}") for i in range(len(images))]
+    replies.append(Reply("Lequel préférez-vous ?", buttons=buttons[:3], kind="choice"))
+    return replies
+
+
 # --- button taps ---
 
 
@@ -215,6 +252,12 @@ async def _on_button(ctx: Ctx, svc: Services, button_id: str) -> list[Reply]:
         return [Reply("Dites-moi ce qu'il faut changer (par vocal ou par écrit), je refais la proposition.")]
     if action == "pick":
         return [await actions.pick_party(ctx, pending, extra)]
+    if action == "logo" and pending.kind == "logo" and extra.isdigit():
+        keys = pending.payload["keys"]
+        ctx.shop.logo_key = keys[min(int(extra), len(keys) - 1)]
+        ctx.session.add(ctx.shop)
+        await queries.settle_pending(ctx.session, pending, PendingStatus.CONFIRMED)
+        return [Reply("C'est votre logo maintenant ! ✅ Il sera sur vos prochains reçus.")]
     if action == "ok":
         return await _confirm(ctx, svc, pending)
     return [Reply("Je n'ai pas compris ce bouton.")]

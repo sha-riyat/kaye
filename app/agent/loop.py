@@ -16,9 +16,11 @@ MAX_TOOL_CALLS = 6
 MODEL_PARAMS = {"reasoning_effort": "minimal", "max_tokens": 1500}
 
 TEXT_TOOLS = [
-    tool(name, m) for name, m in actions.TOOL_MODELS.items() if name not in ("notebook_page", "mobile_money_receipt")
+    tool(name, m)
+    for name, m in actions.TOOL_MODELS.items()
+    if name not in ("notebook_page", "mobile_money_receipt", "shelf_photo")
 ]
-VISION_TOOLS = [tool(n, actions.TOOL_MODELS[n]) for n in ("notebook_page", "mobile_money_receipt")]
+VISION_TOOLS = [tool(n, actions.TOOL_MODELS[n]) for n in ("notebook_page", "mobile_money_receipt", "shelf_photo")]
 
 # Frequent questions are answered by rules, without paying for a model call.
 SHORTCUTS = {
@@ -59,6 +61,7 @@ class Agent:
         return await self._call(ctx, messages, TEXT_TOOLS)
 
     async def on_image(self, ctx: Ctx, data: bytes, mime: str, caption: str | None) -> list[Reply]:
+        ctx.image = (data, mime)
         content = [
             {"type": "text", "text": VISION_PROMPT + (f"\nLégende : {caption}" if caption else "")},
             image_part(data, mime),

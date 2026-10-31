@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from app.agent.loop import Agent
 from app.config import Settings
 from app.db.engine import Database
+from app.meta_media import MetaMedia
 from app.models_client import ModelClient
 from app.storage import Storage
 from app.transcribe import Transcriber
@@ -19,6 +20,7 @@ class Services:
     db: Database
     agent: Agent
     storage: Storage | None
+    media: MetaMedia | None = None
 
     @classmethod
     def build(cls, settings: Settings) -> "Services":
@@ -31,6 +33,7 @@ class Services:
             Database(settings.database_url),
             Agent(models),
             storage,
+            MetaMedia(settings),
         )
 
     async def aclose(self) -> None:
@@ -38,3 +41,5 @@ class Services:
         await self.transcriber.aclose()
         await self.agent.models.aclose()
         await self.db.dispose()
+        if self.media is not None:
+            await self.media.aclose()

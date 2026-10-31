@@ -678,3 +678,54 @@ async def test_a_walk_in_sale_needs_no_name(chat):
     walk_in = ("propose_sale", {"lines": [{"product": "pain", "quantity": 2, "unit_price": 250}], "walk_in": True})
     recap = await chat.say("2 pains, client de passage", walk_in)
     assert "Vente · client de passage" in recap[0].text and recap[0].buttons
+
+
+# --- SAM stock counting and Muse Image logos ---
+
+
+class FakeMedia:
+    def __init__(self, count: int = 9) -> None:
+        self.n, self.nouns = count, []
+
+    async def count(self, image, mime, noun):
+        self.nouns.append(noun)
+        return self.n
+
+    async def logos(self, prompt, n=3):
+        return [f"PNG{i}".encode() for i in range(n)]
+
+    async def aclose(self):
+        pass
+
+
+class FakeStorage:
+    def __init__(self) -> None:
+        self.files: dict[str, bytes] = {}
+
+    async def put(self, key, data, content_type):
+        self.files[key] = data
+
+    async def get(self, key):
+        return self.files[key]
+
+
+async def test_a_shelf_photo_is_counted_by_sam_then_confirmed(chat, db):
+    chat.svc.media = FakeMedia(9)
+    chat.models.say(("shelf_photo", {"product": "riz", "unit": "sac", "object_en": "sack"}))
+    replies = await chat.send("image", media_id="S1")
+    assert "Stock compté sur la photo : riz" in replies[0].text and "J'en vois 9 sac" in replies[0].text
+    assert chat.svc.media.nouns == ["sack"]
+    await chat.tap(replies[0].buttons[0][0])
+    async with db.session() as s:
+        assert (await s.exec(select(Product))).one().stock == 9
+
+
+async def test_create_logo_offers_three_and_keeps_the_chosen_one(chat, db):
+    chat.svc.media, chat.svc.storage = FakeMedia(), FakeStorage()
+    replies = await chat.say("crée mon logo", ("create_logo", {}))
+    assert [r.text for r in replies[:3]] == ["Logo 1", "Logo 2", "Logo 3"] and all(r.image for r in replies[:3])
+    chosen = await chat.tap(replies[3].buttons[1][0])
+    assert "C'est votre logo" in chosen[0].text
+    async with db.session() as s:
+        key = (await s.exec(select(Shop))).one().logo_key
+    assert chat.svc.storage.files[key] == b"PNG1"

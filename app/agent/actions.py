@@ -44,6 +44,8 @@ class Ctx:
     source: str = EntrySource.TEXT
     media_id: int | None = None
     text: str = ""  # what the merchant said (or the voice transcript)
+    media: object | None = None  # MetaMedia: SAM and Muse Image
+    image: tuple[bytes, str] | None = None  # the photo being read, for SAM
     replaying: bool = False  # this message answers our question: its other operations were proposed already
     summary_after: bool = False  # the merchant asked for a summary in the same message: send it after "Oui"
     now: datetime = field(default_factory=queries.utcnow)
@@ -74,6 +76,7 @@ WRITE_TOOLS: dict[str, type[BaseModel]] = {
     "add_seller": s.AddSeller,
     "notebook_page": s.NotebookPage,
     "mobile_money_receipt": s.MobileMoneyReceipt,
+    "shelf_photo": s.ShelfPhoto,
 }
 READ_TOOLS: dict[str, type[BaseModel]] = {
     "customer_balance": s.CustomerName,
@@ -83,6 +86,7 @@ READ_TOOLS: dict[str, type[BaseModel]] = {
     "stock_levels": s.StockQuestion,
     "draft_reminder": s.CustomerName,
     "resend_receipt": s.ReceiptRequest,
+    "create_logo": s.NoArgs,
 }
 TOOL_MODELS = {**WRITE_TOOLS, **READ_TOOLS}
 
@@ -284,8 +288,13 @@ def describe(pending: PendingAction) -> str:
         return f"*Dépense : {p['label']}*\n{money(p['amount'])} FCFA\n\nJe note ?"
     if kind == "stock":
         verb = {"add": "Entrée", "remove": "Sortie", "set": "Recomptage"}[p["mode"]]
-        unit = f" {p['unit']}" if p.get("unit") else ""
+        unit = f" {plural(p['unit'], p['quantity'])}" if p.get("unit") else ""
         out = f"*{verb} de stock : {p['product']}*\n{p['quantity']}{unit}"
+        if p.get("counted"):
+            out = (
+                f"*Stock compté sur la photo : {p['product']}*\n"
+                f"J'en vois {p['quantity']}{unit}. S'il y en a ailleurs, corrigez."
+            )
         out += f"\nStock : {p['before']} → *{p['after']}*"
         return out + "\n\nJe note ?"
     if kind == "seller":
@@ -449,6 +458,26 @@ async def notebook_page(ctx: Ctx, a: s.NotebookPage) -> list[Reply]:
     return await _propose(ctx, "import", {"lines": lines, "media_id": ctx.media_id})
 
 
+async def shelf_photo(ctx: Ctx, a: s.ShelfPhoto) -> list[Reply]:
+    """SAM 3.1 counts the items; the merchant confirms or corrects the stock level."""
+    if ctx.media is None or ctx.image is None:
+        return [Reply("Je ne peux pas compter sur cette photo pour le moment. Dites-moi combien vous en avez.")]
+    try:
+        n = await ctx.media.count(ctx.image[0], ctx.image[1], a.object_en)
+    except Exception:
+        log.exception("SAM failed")
+        return [Reply("Je n'ai pas réussi à compter sur cette photo. Dites-moi combien vous en avez.")]
+    await queries.log_model_call(ctx.session, shop_id=ctx.shop.id, model="sam-3.1", tokens_in=0, tokens_out=0,
+                                 cost_usd=0.0025)  # fmt: skip
+    if n == 0:
+        return [Reply(f"Je ne vois pas de {a.product} sur cette photo. Essayez de plus loin, bien éclairé.")]
+    product = await queries.get_product(ctx.session, ctx.shop.id, a.product)
+    before = (product.stock or 0) if product else 0
+    payload = {"product": product.name if product else a.product.strip().lower(), "quantity": n, "mode": "set",
+               "unit": a.unit, "before": before, "after": n, "counted": True}  # fmt: skip
+    return await _propose(ctx, "stock", payload)
+
+
 async def mobile_money_receipt(ctx: Ctx, a: s.MobileMoneyReceipt) -> list[Reply]:
     if a.reference and await _reference_seen(ctx, a.reference):
         return [Reply(f"Ce paiement ({a.reference}) est déjà noté. Je ne le compte pas deux fois.")]
@@ -576,7 +605,7 @@ async def stock_levels(ctx: Ctx, a: s.StockQuestion) -> list[Reply]:
                     "Dites-moi combien vous en avez : « j'ai 20 sacs de riz »."
                 )
             ]
-        unit = f" {p.default_unit}" if p.default_unit else ""
+        unit = f" {plural(p.default_unit, p.stock)}" if p.default_unit else ""
         return [Reply(f"Il reste *{p.stock}{unit}* de {p.name}.")]
     products = await queries.tracked_products(ctx.session, ctx.shop.id)
     if not products:
@@ -605,6 +634,11 @@ async def resend_receipt(ctx: Ctx, a: s.ReceiptRequest) -> list[Reply]:
     if entry is None:
         return [Reply("Je ne trouve pas de vente à mettre sur un reçu.")]
     return [Reply(str(entry.id), kind="receipt")]
+
+
+async def create_logo(ctx: Ctx, _: s.NoArgs) -> list[Reply]:
+    """Drawn by the router (Muse Image, then R2): it needs storage and several image messages."""
+    return [Reply("", kind="logo")]
 
 
 async def draft_reminder(ctx: Ctx, a: s.CustomerName) -> list[Reply]:
@@ -646,6 +680,8 @@ HANDLERS = {
     "stock_levels": stock_levels,
     "draft_reminder": draft_reminder,
     "resend_receipt": resend_receipt,
+    "shelf_photo": shelf_photo,
+    "create_logo": create_logo,
 }
 
 
