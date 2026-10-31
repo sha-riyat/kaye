@@ -79,7 +79,7 @@ async def main(path: Path, db_url: str) -> None:
             await conn.run_sync(SQLModel.metadata.create_all)
 
     await reset()
-    n, last_buttons = 0, []
+    n = 0
     for raw in path.read_text().splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -103,7 +103,12 @@ async def main(path: Path, db_url: str) -> None:
             wa.offered.clear()
             print(f"\n\033[33mVous\033[0m {line}")
         msg = InboundMessage(
-            wamid=f"wamid.replay.{n}", sender=SENDER, phone_number_id="PNID", profile_name="Replay", timestamp=n, **fields
+            wamid=f"wamid.replay.{n}",
+            sender=SENDER,
+            phone_number_id="PNID",
+            profile_name="Replay",
+            timestamp=n,
+            **fields,
         )
         await handle_message(msg, svc)
     await svc.agent.models.aclose()
