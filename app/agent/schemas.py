@@ -155,7 +155,16 @@ def inline_schema(model: type[BaseModel]) -> dict[str, Any]:
         if isinstance(node, dict):
             if "$ref" in node:
                 return resolve(defs[node["$ref"].split("/")[-1]])
-            return {k: resolve(v) for k, v in node.items() if k != "title"}
+            options = node.get("anyOf")
+            if options and len(options) == 2 and {"type": "null"} in options:
+                # `X | None = None` -> plain X: optional fields are simply left out of `required`
+                kept = next(o for o in options if o != {"type": "null"})
+                node = {**{k: v for k, v in node.items() if k != "anyOf"}, **kept}
+            return {
+                k: resolve(v)
+                for k, v in node.items()
+                if k != "title" and not (k == "default" and v in (None, False, []))
+            }
         if isinstance(node, list):
             return [resolve(v) for v in node]
         return node
@@ -169,6 +178,6 @@ def tool(name: str, model: type[BaseModel]) -> dict[str, Any]:
         "function": {
             "name": name,
             "description": (model.__doc__ or "").strip(),
-            "parameters": inline_schema(model),
+            "parameters": {k: v for k, v in inline_schema(model).items() if k != "description"},
         },
     }
