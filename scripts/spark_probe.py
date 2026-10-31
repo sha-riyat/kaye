@@ -77,9 +77,7 @@ async def probe_tools(client: ModelClient, model: str) -> float:
     return total
 
 
-async def probe_vision(
-    client: ModelClient, model: str, image: str, prompt: str, schema: type[BaseModel]
-) -> float:
+async def probe_vision(client: ModelClient, model: str, image: str, prompt: str, schema: type[BaseModel]) -> float:
     path = IMAGES / image
     mime = "image/png" if path.suffix == ".png" else "image/jpeg"
     start = time.perf_counter()

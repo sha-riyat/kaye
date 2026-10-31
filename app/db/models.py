@@ -62,6 +62,7 @@ class EntryKind(StrEnum):
     PAYMENT_RECEIVED = "payment_received"
     SUPPLIER_PURCHASE = "supplier_purchase"
     SUPPLIER_PAYMENT = "supplier_payment"
+    EXPENSE = "expense"  # rent, transport, bags...: money out, nothing owed
 
 
 class EntrySource(StrEnum):
@@ -118,7 +119,7 @@ class Product(SQLModel, table=True):
     shop_id: int = _fk("shop.id")
     name: str
     default_unit: str | None = None
-    stock: int | None = None  # level 3 only
+    stock: int | None = None  # None = not tracked yet; set by the first stock entry
     created_at: datetime | None = _created_at()
 
 

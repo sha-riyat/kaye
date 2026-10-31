@@ -1,0 +1,15 @@
+# The demo thread of the video: onboarding, stock, a credit sale, mobile money, the evening summary.
+Bonjour
+Chez Afi
+j'ai reçu 20 sacs de riz de Koffi à 9000 le sac, je le paie vendredi prochain
+[tap 1]
+[tap 1]
+j'ai vendu 3 sacs de riz à Ama à 11000, elle a donné vingt-cinq mille
+[tap 1]
+transport 3500
+[tap 1]
+il me reste combien de riz ?
+qui me doit ?
+bilan
+annule
+[tap 1]

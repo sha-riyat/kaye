@@ -160,9 +160,7 @@ async def test_same_mobile_money_reference_cannot_be_counted_twice(db, shop):
 @needs_db
 async def test_reversal_cancels_entry_and_keeps_history(db, shop):
     async with db.session() as s:
-        sale = await record_entry(
-            s, shop_id=shop["shop"], kind=EntryKind.SALE, amount=8_000, contact_id=shop["ama"]
-        )
+        sale = await record_entry(s, shop_id=shop["shop"], kind=EntryKind.SALE, amount=8_000, contact_id=shop["ama"])
         reversal = await reverse_entry(s, shop_id=shop["shop"], entry_id=sale.id)
 
         assert reversal.amount == -8_000
@@ -195,12 +193,8 @@ async def test_debtors_sorted_by_balance_and_split_by_kind(db, shop):
         sid = shop["shop"]
         await record_entry(s, shop_id=sid, kind=EntryKind.SALE, amount=3_000, contact_id=shop["ama"])
         await record_entry(s, shop_id=sid, kind=EntryKind.SALE, amount=9_000, contact_id=shop["kofi"])
-        await record_entry(
-            s, shop_id=sid, kind=EntryKind.PAYMENT_RECEIVED, amount=1_000, contact_id=shop["kofi"]
-        )
-        await record_entry(
-            s, shop_id=sid, kind=EntryKind.SUPPLIER_PURCHASE, amount=50_000, contact_id=shop["koffi"]
-        )
+        await record_entry(s, shop_id=sid, kind=EntryKind.PAYMENT_RECEIVED, amount=1_000, contact_id=shop["kofi"])
+        await record_entry(s, shop_id=sid, kind=EntryKind.SUPPLIER_PURCHASE, amount=50_000, contact_id=shop["koffi"])
 
         customers = await debtors(s, shop_id=sid)
         assert [(d.contact.name, d.balance) for d in customers] == [("Kofi", 8_000), ("Ama", 3_000)]

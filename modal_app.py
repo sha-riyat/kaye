@@ -10,32 +10,48 @@ app = modal.App("kaye")
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("ffmpeg")
+    .apt_install("ffmpeg", "chromium", "fonts-liberation")
     .uv_sync(extra_options="--no-dev")
     .add_local_python_source("app")
+    .add_local_dir("assets/brand", remote_path="/root/assets/brand")
 )
 secrets = [modal.Secret.from_name("kaye-secrets")]
 
 
-# No automatic retries: a retried job could send the same reply (or later, write the same entry) twice.
+# No automatic retries: a retried job could send the same reply (or write the same entry) twice.
 @app.function(image=image, secrets=secrets, timeout=300)
 async def process_message(message: dict) -> None:
     import logging
 
     from app.config import get_settings
     from app.router import handle_message
-    from app.transcribe import Transcriber
+    from app.services import Services
     from app.webhook import InboundMessage
-    from app.whatsapp import WhatsAppClient
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    settings = get_settings()
-    wa, transcriber = WhatsAppClient(settings), Transcriber(settings)
+    svc = Services.build(get_settings())
     try:
-        await handle_message(InboundMessage.model_validate(message), wa, transcriber)
+        await handle_message(InboundMessage.model_validate(message), svc)
     finally:
-        await wa.aclose()
-        await transcriber.aclose()
+        await svc.aclose()
+
+
+# Hourly: sends each shop its evening summary at its own hour, and supplier reminders the day before
+# they fall due. Also keeps the Supabase project awake.
+@app.function(image=image, secrets=secrets, timeout=600, schedule=modal.Cron("0 * * * *"))
+async def hourly_jobs() -> None:
+    import logging
+
+    from app.config import get_settings
+    from app.jobs import run_hourly
+    from app.services import Services
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    svc = Services.build(get_settings())
+    try:
+        await run_hourly(svc)
+    finally:
+        await svc.aclose()
 
 
 @app.function(image=image, secrets=secrets)

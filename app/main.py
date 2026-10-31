@@ -46,9 +46,7 @@ def create_app(
     @app.post("/webhook")
     async def receive(request: Request) -> Response:
         body = await request.body()
-        if not verify_signature(
-            body, request.headers.get("x-hub-signature-256"), settings.whatsapp_app_secret
-        ):
+        if not verify_signature(body, request.headers.get("x-hub-signature-256"), settings.whatsapp_app_secret):
             log.warning("rejected webhook with invalid signature")
             raise HTTPException(status_code=401, detail="invalid signature")
 

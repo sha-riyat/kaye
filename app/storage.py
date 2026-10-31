@@ -46,9 +46,7 @@ class Storage:
         )
 
     async def put(self, key: str, data: bytes, content_type: str) -> None:
-        await asyncio.to_thread(
-            self._s3.put_object, Bucket=self.bucket, Key=key, Body=data, ContentType=content_type
-        )
+        await asyncio.to_thread(self._s3.put_object, Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
 
     async def get(self, key: str) -> bytes:
         response = await asyncio.to_thread(self._s3.get_object, Bucket=self.bucket, Key=key)

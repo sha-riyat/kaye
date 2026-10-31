@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     r2_secret_access_key: str = ""
     r2_bucket: str = "kaye-media"
 
+    # Name of the approved WhatsApp template for the evening summary (2 variables: shop, one-line figures)
+    summary_template_name: str = ""
+
     # Abuse protection
     daily_message_quota_per_user: int = 100
     global_daily_model_budget_usd: float = 5.0

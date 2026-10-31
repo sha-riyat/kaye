@@ -1,0 +1,553 @@
+"""End-to-end conversations against a real Postgres, with a scripted model and a fake WhatsApp.
+
+Set TEST_DATABASE_URL (e.g. postgresql://postgres:kaye@127.0.0.1:54329/kaye_test). The model is
+scripted so the tests check what the code does with its answers: resolve, compute, confirm, write.
+"""
+
+import json
+import os
+from types import SimpleNamespace
+
+import pytest
+from sqlalchemy import text
+from sqlmodel import SQLModel, select
+
+from app import router
+from app.agent.loop import Agent
+from app.agent.reply import Reply
+from app.config import Settings
+from app.db import ledger
+from app.db.engine import Database
+from app.db.models import Contact, Entry, PendingAction, Product, Shop
+from app.models_client import Usage
+from app.router import handle_message
+from app.services import Services
+from app.transcribe import Transcript
+from app.webhook import InboundMessage
+
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
+pytestmark = pytest.mark.skipif(not TEST_DATABASE_URL, reason="TEST_DATABASE_URL not set")
+
+PHONE = "22890000001"
+
+
+class FakeModels:
+    """Answers each call from a script: a list of (tool_name, args) tuples, or a plain string."""
+
+    def __init__(self) -> None:
+        self.script: list = []
+        self.calls: list[dict] = []
+
+    def say(self, *answers) -> None:
+        self.script.extend(answers)
+
+    async def chat(self, **kwargs):
+        self.calls.append(kwargs)
+        answer = self.script.pop(0)
+        if isinstance(answer, tuple):
+            answer = [answer]
+        if isinstance(answer, str):
+            message = SimpleNamespace(content=answer, tool_calls=None)
+        else:
+            calls = [SimpleNamespace(function=SimpleNamespace(name=n, arguments=json.dumps(a))) for n, a in answer]
+            message = SimpleNamespace(content=None, tool_calls=calls)
+        response = SimpleNamespace(choices=[SimpleNamespace(message=message)])
+        return response, Usage("muse-spark-1.3", 1000, 0, 100)
+
+    async def aclose(self) -> None:
+        pass
+
+
+class FakeWA:
+    def __init__(self) -> None:
+        self.sent: list[Reply] = []
+        self.media = b"IMAGE-BYTES"
+
+    def from_number(self, _):
+        return self
+
+    async def mark_read(self, _):
+        pass
+
+    async def download_media(self, _):
+        return self.media, "image/jpeg"
+
+    async def send_text(self, to, body, reply_to=None):
+        self.sent.append(Reply(body))
+
+    async def deliver(self, to, reply, reply_to=None):
+        self.sent.append(reply)
+
+    async def aclose(self):
+        pass
+
+
+class FakeTranscriber:
+    text = "j'ai vendu du riz"
+
+    async def transcribe(self, _):
+        return Transcript(text=self.text, audio_duration_ms=1000)
+
+    async def aclose(self):
+        pass
+
+
+class Chat:
+    """One merchant talking to Kayé."""
+
+    def __init__(self, svc: Services, models: FakeModels, wa: FakeWA, sender: str = PHONE) -> None:
+        self.svc, self.models, self.wa, self.sender, self.n = svc, models, wa, sender, 0
+
+    async def send(self, type_: str = "text", text: str | None = None, **fields) -> list[Reply]:
+        self.n += 1
+        msg = InboundMessage(
+            wamid=f"wamid.{self.sender}.{self.n}", sender=self.sender, phone_number_id="PNID", profile_name="Afi",
+            timestamp=1, type=type_, raw_type=type_, text=text, **fields,
+        )  # fmt: skip
+        self.wa.sent = []
+        await handle_message(msg, self.svc)
+        for reply in self.wa.sent:  # amounts use a narrow no-break space; tests read plain spaces
+            reply.text = reply.text.replace("\u202f", " ")
+        return self.wa.sent
+
+    async def say(self, text: str, *model_answer) -> list[Reply]:
+        self.models.say(*model_answer)
+        return await self.send(text=text)
+
+    async def tap(self, button_id: str) -> list[Reply]:
+        return await self.send("button", text="x", button_id=button_id)
+
+    def last_pending_id(self, replies: list[Reply]) -> int:
+        buttons = [b for r in replies for b in r.buttons]
+        return int(buttons[0][0].split(":")[1])
+
+
+@pytest.fixture
+async def db():
+    database = Database(TEST_DATABASE_URL)
+    async with database.engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
+        await conn.run_sync(SQLModel.metadata.create_all)
+    yield database
+    await database.dispose()
+
+
+@pytest.fixture(autouse=True)
+def fast_receipts(monkeypatch):
+    async def fake_render(template, data, extra=0):
+        return b"\x89PNG-" + data["number"].encode()
+
+    monkeypatch.setattr(router, "render_png", fake_render)
+
+
+@pytest.fixture
+def models():
+    return FakeModels()
+
+
+@pytest.fixture
+async def chat(db, models):
+    settings = Settings(_env_file=None, daily_message_quota_per_user=100, global_daily_model_budget_usd=5.0)
+    wa = FakeWA()
+    svc = Services(settings, wa, FakeTranscriber(), db, Agent(models), storage=None)
+    c = Chat(svc, models, wa)
+    await c.send(text="Bonjour")  # welcome
+    await c.send(text="Chez Afi")  # shop name
+    return c
+
+
+async def contact_named(db, name: str) -> Contact | None:
+    async with db.session() as s:
+        return (await s.exec(select(Contact).where(Contact.name == name))).first()
+
+
+async def balance(db, name: str) -> int:
+    contact = await contact_named(db, name)
+    async with db.session() as s:
+        return await ledger.contact_balance(s, shop_id=contact.shop_id, contact_id=contact.id)
+
+
+SALE = ("propose_sale", {"lines": [{"product": "riz", "quantity": 3, "unit": "sac", "unit_price": 11_000}],
+                         "customer": "Ama Koudjo", "paid": 25_000})  # fmt: skip
+
+
+# --- onboarding ---
+
+
+async def test_onboarding_names_the_shop(db, models):
+    settings = Settings(_env_file=None)
+    wa = FakeWA()
+    svc = Services(settings, wa, FakeTranscriber(), db, Agent(models), storage=None)
+    c = Chat(svc, models, wa)
+    welcome = await c.send(text="Bonjour")
+    assert "Comment s'appelle votre boutique" in welcome[0].text
+    assert "démo" in welcome[1].text
+    named = await c.send(text="Chez Afi")
+    assert "Chez Afi" in named[0].text and "photo de votre cahier" in named[0].text
+    async with db.session() as s:
+        assert (await s.exec(select(Shop))).one().name == "Chez Afi"
+    assert models.calls == []  # onboarding never costs a model call
+
+
+async def test_an_overlong_shop_name_is_asked_again(db, models):
+    wa = FakeWA()
+    c = Chat(Services(Settings(_env_file=None), wa, FakeTranscriber(), db, Agent(models), None), models, wa)
+    await c.send(text="Bonjour")
+    again = await c.send(text="x" * 200)
+    assert "comment s'appelle votre boutique" in again[0].text.lower()
+
+
+# --- sales ---
+
+
+async def test_credit_sale_needs_a_yes_then_sends_a_receipt(chat, db):
+    replies = await chat.say("j'ai vendu 3 sacs de riz à Ama, 25 000 reçus", SALE)
+    assert "Vente à Ama Koudjo" in replies[0].text
+    assert "33 000" in replies[0].text and "Reste dû" in replies[0].text and "8 000" in replies[0].text
+    assert [b[1] for b in replies[0].buttons] == ["Oui, noter", "Corriger", "Annuler"]
+    assert await contact_named(db, "Ama Koudjo") is None  # nothing written before "Oui"
+
+    done = await chat.tap(replies[0].buttons[0][0])
+    assert "Ama Koudjo vous doit 8" in done[0].text
+    assert done[1].image and "Reçu n° 0001" in done[1].text
+    assert await balance(db, "Ama Koudjo") == 8_000
+
+
+async def test_the_model_cannot_set_a_wrong_total(chat):
+    sale = ("propose_sale", {"lines": [{"product": "riz", "quantity": 3, "unit_price": 11_000}], "total": 30_000})
+    replies = await chat.say("3 riz à 11 000, total 30 000", sale)
+    assert "Total : *33 000" in replies[0].text
+    assert "30 000" in replies[0].text and "calcul donne" in replies[0].text
+
+
+async def test_double_tap_on_yes_writes_once(chat, db):
+    replies = await chat.say("vente", SALE)
+    yes = replies[0].buttons[0][0]
+    await chat.tap(yes)
+    again = await chat.tap(yes)
+    assert "déjà été traitée" in again[0].text
+    async with db.session() as s:
+        assert len((await s.exec(select(Entry))).all()) == 1
+
+
+async def test_cancel_writes_nothing(chat, db):
+    replies = await chat.say("vente", SALE)
+    cancelled = await chat.tap(replies[0].buttons[2][0])
+    assert "Rien n'est noté" in cancelled[0].text
+    async with db.session() as s:
+        assert (await s.exec(select(Entry))).all() == []
+
+
+async def test_an_expired_proposal_is_refused(chat, db):
+    replies = await chat.say("vente", SALE)
+    async with db.engine.begin() as conn:
+        await conn.execute(text("update pending_action set expires_at = now() - interval '1 minute'"))
+    expired = await chat.tap(replies[0].buttons[0][0])
+    assert "plus valable" in expired[0].text
+    async with db.session() as s:
+        assert (await s.exec(select(Entry))).all() == []
+
+
+async def test_correct_button_replays_the_proposal_with_the_fix(chat, models):
+    replies = await chat.say("vente", SALE)
+    asked = await chat.tap(replies[0].buttons[1][0])
+    assert "ce qu'il faut changer" in asked[0].text
+    fixed = ("propose_sale", {"lines": [{"product": "riz", "quantity": 3, "unit": "sac", "unit_price": 12_000}],
+                             "customer": "Ama Koudjo", "paid": 25_000})  # fmt: skip
+    again = await chat.say("non, 12 000 le sac", fixed)
+    sent_to_model = models.calls[-1]["messages"][-1]["content"]
+    assert "Vente à Ama Koudjo" in sent_to_model and "12 000 le sac" in sent_to_model
+    assert "36 000" in again[0].text
+
+
+async def test_a_missing_price_is_asked_then_remembered(chat, models):
+    no_price = ("propose_sale", {"lines": [{"product": "huile", "quantity": 2}], "customer": "Kofi"})
+    asked = await chat.say("2 huile à Kofi", no_price)
+    assert "À quel prix" in asked[0].text and asked[0].buttons == []
+    priced = ("propose_sale", {"lines": [{"product": "huile", "quantity": 2, "unit_price": 6_500}], "customer": "Kofi"})
+    replies = await chat.say("6 500 pièce", priced)
+    assert "2 huile × 6 500 = 13 000" in replies[0].text
+    assert "2 huile à Kofi" in models.calls[-1]["messages"][-1]["content"]  # the first message came along
+
+
+async def test_usual_price_is_learned_from_a_confirmed_sale(chat):
+    first = await chat.say("vente", SALE)
+    await chat.tap(first[0].buttons[0][0])
+    no_price = (
+        "propose_sale",
+        {"lines": [{"product": "riz", "quantity": 2, "unit": "sac"}], "customer": "Kofi", "paid": 22_000},
+    )
+    replies = await chat.say("2 sacs de riz à Kofi", no_price)
+    assert "2 sac riz × 11 000 = 22 000" in replies[0].text
+
+
+async def test_ambiguous_customer_is_asked_with_a_list(chat, db):
+    line = {"product": "riz", "quantity": 1, "unit_price": 1_000}
+    first = await chat.say("vente", ("propose_sale", {"lines": [line], "customer": "Ama Koudjo"}))
+    await chat.tap(first[0].buttons[0][0])
+    # a second Ama who shares only a first name is never merged silently
+    second = await chat.say("vente", ("propose_sale", {"lines": [line], "customer": "Ama Mensah"}))
+    assert "plusieurs" in second[0].text
+    confirm = await chat.tap(next(b[0] for b in second[0].buttons if b[0].endswith("new")))
+    await chat.tap(confirm[0].buttons[0][0])
+    sale = (
+        "propose_sale",
+        {"lines": [{"product": "riz", "quantity": 1, "unit_price": 1_000}], "customer": "Ama", "paid": 0},
+    )
+    asked = await chat.say("riz à Ama, elle doit", sale)
+    assert "plusieurs" in asked[0].text
+    ids = [b[0] for b in asked[0].buttons]
+    assert len(ids) == 3  # two candidates and "new"
+    picked_id = next(i for i in ids if not i.endswith("new"))
+    confirmation = await chat.tap(picked_id)
+    assert "Vente à" in confirmation[0].text and confirmation[0].buttons[0][1] == "Oui, noter"
+
+
+async def test_a_spoken_nickname_is_learned_once_confirmed(chat, db):
+    def sale(name):
+        line = {"product": "riz", "quantity": 1, "unit_price": 1_000}
+        return ("propose_sale", {"lines": [line], "customer": name, "paid": 0})
+
+    first = await chat.say("vente", sale("Ama Koudjo"))
+    await chat.tap(first[0].buttons[0][0])
+    asked = await chat.say("vente", sale("Ama du marché"))  # shares a word: never merged silently
+    assert "plusieurs" in asked[0].text
+    picked = await chat.tap(next(b[0] for b in asked[0].buttons if not b[0].endswith("new")))
+    await chat.tap(picked[0].buttons[0][0])
+    assert "Ama du marché" in (await contact_named(db, "Ama Koudjo")).aliases
+    again = await chat.say("vente", sale("Ama du marché"))
+    assert "Vente à Ama Koudjo" in again[0].text  # now recognised at once
+
+
+async def test_a_shortened_name_is_taken_for_the_known_contact(chat):
+    line = {"product": "riz", "quantity": 1, "unit_price": 1_000}
+    first = await chat.say("vente", ("propose_sale", {"lines": [line], "customer": "Ama Koudjo", "paid": 0}))
+    await chat.tap(first[0].buttons[0][0])
+    second = await chat.say("vente", ("propose_sale", {"lines": [line], "customer": "Ama", "paid": 0}))
+    assert "Vente à Ama Koudjo" in second[0].text and "nouveau" not in second[0].text
+
+
+# --- payments, mobile money, notebook ---
+
+
+async def test_payment_settles_a_debt(chat, db):
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])
+    pay = ("propose_payment", {"customer": "Ama", "amount": 8_000})
+    replies = await chat.say("Ama a payé 8 000", pay)
+    assert "Dette : 8 000 → *0*" in replies[0].text
+    done = await chat.tap(replies[0].buttons[0][0])
+    assert "soldée" in done[0].text
+    assert await balance(db, "Ama Koudjo") == 0
+
+
+MOMO = (
+    "mobile_money_receipt",
+    {"provider": "T-Money", "amount": 8_000, "sender_name": "Ama Koudjo", "reference": "TM123"},
+)
+
+
+async def test_mobile_money_screenshot_pays_the_debt_once(chat, db):
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])
+    chat.models.say(MOMO)
+    replies = await chat.send("image", media_id="M1")
+    assert "T-Money" in replies[0].text and "Dette : 8 000" in replies[0].text
+    await chat.tap(replies[0].buttons[0][0])
+    assert await balance(db, "Ama Koudjo") == 0
+    chat.models.say(MOMO)
+    duplicate = await chat.send("image", media_id="M2")
+    assert "déjà noté" in duplicate[0].text
+
+
+async def test_notebook_photo_imports_debts_after_one_yes(chat, db):
+    page = ("notebook_page", {"lines": [
+        {"customer": "Ama", "amount_owed": 15_000, "description": "riz"},
+        {"customer": "Komlan", "amount_owed": 5_000, "unclear": True},
+    ]})  # fmt: skip
+    chat.models.say(page)
+    replies = await chat.send("image", media_id="M1")
+    assert "2 dette(s)" in replies[0].text and "❓ Komlan" in replies[0].text and "20 000" in replies[0].text
+    await chat.tap(replies[0].buttons[0][0])
+    assert await balance(db, "Ama") == 15_000 and await balance(db, "Komlan") == 5_000
+
+
+# --- suppliers, expenses, stock ---
+
+
+async def test_supplier_purchase_with_due_date_and_stock(chat, db):
+    debt = (
+        "propose_supplier_debt",
+        {"supplier": "Koffi", "amount": 180_000, "due_date": "2026-11-06", "items": "20 sacs de riz"},
+    )
+    stock = ("propose_stock_change", {"product": "riz", "quantity": 20, "mode": "add", "unit": "sac"})
+    chat.models.say([debt, stock])
+    replies = await chat.send(text="Koffi a livré 20 sacs de riz, 180 000, je paie vendredi")
+    assert "Achat chez Koffi" in replies[0].text and "06/11/2026" in replies[0].text
+    assert "Entrée de stock" in replies[1].text and "0 → *20*" in replies[1].text
+    await chat.tap(replies[0].buttons[0][0])
+    await chat.tap(replies[1].buttons[0][0])
+    assert await balance(db, "Koffi") == 180_000
+    due = await chat.send(text="qui je dois payer ?")
+    assert "Koffi : *180 000" in due[0].text and "06/11" in due[0].text
+
+
+async def test_sales_lower_tracked_stock_and_warn_when_low(chat, db):
+    start = await chat.say(
+        "j'ai 5 sacs de riz", ("propose_stock_change", {"product": "riz", "quantity": 5, "mode": "set", "unit": "sac"})
+    )
+    await chat.tap(start[0].buttons[0][0])
+    sale = (
+        "propose_sale",
+        {"lines": [{"product": "riz", "quantity": 3, "unit": "sac", "unit_price": 11_000}], "customer": "Ama"},
+    )
+    replies = await chat.say("3 riz à Ama", sale)
+    done = await chat.tap(replies[0].buttons[0][0])
+    assert "Il ne reste que 2 riz" in done[0].text
+    async with db.session() as s:
+        assert (await s.exec(select(Product))).one().stock == 2
+
+
+async def test_untracked_products_do_not_go_negative(chat, db):
+    replies = await chat.say("vente", SALE)
+    await chat.tap(replies[0].buttons[0][0])
+    async with db.session() as s:
+        assert (await s.exec(select(Product).where(Product.name == "riz"))).one().stock is None
+
+
+async def test_stock_question_is_answered_by_code(chat, models):
+    await chat.say(
+        "j'ai 2 bidons d'huile", ("propose_stock_change", {"product": "huile", "quantity": 2, "mode": "set"})
+    )
+    pending = await chat.send(text="stock")  # shortcut, no model call
+    assert pending[0].text.startswith("Je ne suis encore aucun stock") or "huile" in pending[0].text
+
+
+async def test_expense_and_cash_in_the_daily_summary(chat):
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])
+    spend = await chat.say("transport 3 500", ("propose_expense", {"amount": 3_500, "label": "transport"}))
+    assert "Dépense : transport" in spend[0].text
+    await chat.tap(spend[0].buttons[0][0])
+    calls_before = len(chat.models.calls)
+    bilan = await chat.send(text="bilan")  # shortcut: no model call
+    assert len(chat.models.calls) == calls_before
+    text_ = bilan[0].text
+    assert "Ventes : *33 000" in text_ and "à crédit 8 000" in text_
+    assert "En caisse : *21 500" in text_  # 25 000 cashed - 3 500 expense
+    assert "À encaisser : *8 000" in text_
+
+
+async def test_whos_in_debt_and_a_ready_reminder(chat, db):
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])
+    async with db.session() as s:
+        ama = (await s.exec(select(Contact))).one()
+        ama.phone = "+22890123456"
+        s.add(ama)
+    debtors = await chat.send(text="qui me doit ?")
+    assert "Ama Koudjo : *8 000" in debtors[0].text and debtors[0].buttons[0][1].startswith("Relancer")
+    reminder = await chat.tap(debtors[0].buttons[0][0])
+    assert "il reste 8 000 FCFA chez Chez Afi" in reminder[0].text
+    assert reminder[0].link.startswith("https://wa.me/22890123456?text=")
+
+
+async def test_undo_the_last_operation_restores_everything(chat, db):
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])
+    undo = await chat.send(text="annule")  # shortcut
+    assert "Annuler cette opération" in undo[0].text and "Vente · Ama Koudjo" in undo[0].text
+    await chat.tap(undo[0].buttons[0][0])
+    assert await balance(db, "Ama Koudjo") == 0
+    async with db.session() as s:
+        assert len((await s.exec(select(Entry))).all()) == 2  # the sale and its reversal: nothing deleted
+
+
+# --- sellers, voice, limits ---
+
+
+async def test_a_seller_can_sell_but_not_see_the_books(chat, db, models):
+    add = await chat.say(
+        "ajoute mon vendeur Kodjo +228 91 11 22 33", ("add_seller", {"phone": "+228 91 11 22 33", "name": "Kodjo"})
+    )
+    assert "Ajouter Kodjo comme vendeur" in add[0].text
+    await chat.tap(add[0].buttons[0][0])
+    seller = Chat(chat.svc, models, chat.wa, sender="22891112233")
+    refused = await seller.send(text="qui me doit ?")  # a shortcut, still refused
+    assert "réservée au patron" in refused[0].text
+    sale = await seller.say("vente", SALE)
+    assert "Vente à Ama Koudjo" in sale[0].text
+    done = await seller.tap(sale[0].buttons[0][0])
+    assert "C'est noté" in done[0].text
+    async with db.session() as s:
+        assert (await s.exec(select(Entry))).one().created_by is not None
+
+
+async def test_voice_note_is_transcribed_then_handled(chat):
+    chat.models.say(SALE)
+    replies = await chat.send("audio", media_id="A1")
+    assert replies[0].text.startswith("🎙️ J'ai compris")
+    assert "Vente à Ama Koudjo" in replies[1].text
+
+
+async def test_logo_caption_is_not_read_as_a_notebook(chat, models):
+    replies = await chat.send("image", text="mon logo", media_id="L1")
+    assert "logo" in replies[0].text.lower()
+    assert models.calls == []
+
+
+async def test_daily_quota_blocks_the_model_but_not_buttons(chat, db):
+    chat.svc.settings.daily_message_quota_per_user = 1
+    chat.models.say("Bonjour !")
+    await chat.send(text="salut")
+    blocked = await chat.send(text="encore")
+    assert "reprends demain" in blocked[0].text
+    assert len(chat.models.calls) == 1
+
+
+async def test_chitchat_gets_a_short_reply_and_no_write(chat, db):
+    replies = await chat.say("merci Kayé", "Avec plaisir ! 🙏")
+    assert replies[0].text == "Avec plaisir ! 🙏"
+    async with db.session() as s:
+        assert (await s.exec(select(PendingAction))).all() == []
+
+
+async def test_invalid_tool_arguments_ask_to_rephrase(chat):
+    replies = await chat.say("vends", ("propose_sale", {"lines": []}))
+    assert "pas bien compris" in replies[0].text
+
+
+async def test_model_cost_is_logged_per_call(chat, db):
+    await chat.say("salut", "Bonjour !")
+    async with db.session() as s:
+        from app.db.models import ModelCall
+
+        calls = (await s.exec(select(ModelCall))).all()
+        assert len(calls) == 1 and float(calls[0].cost_usd) > 0 and calls[0].shop_id is not None
+
+
+# --- scheduled jobs ---
+
+
+async def test_evening_summary_and_supplier_reminder_are_sent(chat, db, monkeypatch):
+    from datetime import UTC, datetime
+
+    from app import jobs
+    from app.db import queries
+
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])
+    debt = ("propose_supplier_debt", {"supplier": "Koffi", "amount": 90_000, "due_date": "2026-11-01"})
+    r = await chat.say("Koffi 90 000", debt)
+    await chat.tap(r[0].buttons[0][0])
+    fixed_now = datetime.now(UTC).replace(hour=8)  # the supplier-reminder hour
+    monkeypatch.setattr(queries, "utcnow", lambda: fixed_now)
+    async with db.session() as s:
+        shop = (await s.exec(select(Shop))).one()
+        shop.summary_hour = 8
+        s.add(shop)
+    chat.wa.sent = []
+    await jobs.run_hourly(chat.svc)
+    texts = [m.text for m in chat.wa.sent]
+    assert any("Bilan du jour" in t and "8 000" in t.replace(" ", " ") for t in texts)
+    assert any("Rappel fournisseurs" in t and "Koffi" in t for t in texts)

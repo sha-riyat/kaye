@@ -43,6 +43,8 @@ def debt_delta(kind: EntryKind, amount: int, paid: int = 0) -> int:
     """How much this operation changes what the contact owes us (or we owe a supplier)."""
     if amount < 0 or paid < 0:
         raise LedgerError("amounts must be positive")
+    if kind == EntryKind.EXPENSE:
+        return 0
     if kind in (EntryKind.SALE, EntryKind.SUPPLIER_PURCHASE):
         if paid > amount:
             raise LedgerError(f"paid {paid} exceeds total {amount}")
@@ -99,9 +101,7 @@ async def record_entry(
     return entry
 
 
-async def reverse_entry(
-    session: AsyncSession, *, shop_id: int, entry_id: int, created_by: int | None = None
-) -> Entry:
+async def reverse_entry(session: AsyncSession, *, shop_id: int, entry_id: int, created_by: int | None = None) -> Entry:
     """Cancel an entry by inserting its negation. The original is kept for the audit trail."""
     original = await session.get(Entry, entry_id)
     if original is None or original.shop_id != shop_id:
@@ -129,9 +129,7 @@ async def reverse_entry(
     return reversal
 
 
-async def last_active_entry(
-    session: AsyncSession, *, shop_id: int, created_by: int | None = None
-) -> Entry | None:
+async def last_active_entry(session: AsyncSession, *, shop_id: int, created_by: int | None = None) -> Entry | None:
     """Most recent entry that is neither a reversal nor reversed."""
     reversed_ids = select(Entry.reverses_entry_id).where(
         Entry.shop_id == shop_id, col(Entry.reverses_entry_id).is_not(None)
@@ -163,9 +161,7 @@ class Debtor:
     oldest_credit_at: datetime | None
 
 
-async def debtors(
-    session: AsyncSession, *, shop_id: int, kind: ContactKind = ContactKind.CUSTOMER
-) -> list[Debtor]:
+async def debtors(session: AsyncSession, *, shop_id: int, kind: ContactKind = ContactKind.CUSTOMER) -> list[Debtor]:
     """Contacts with a positive balance, largest first."""
     balance = func.sum(Entry.debt_delta).label("balance")
     oldest = func.min(Entry.created_at).filter(Entry.debt_delta > 0).label("oldest")
@@ -185,3 +181,72 @@ async def _contact_in_shop(session: AsyncSession, shop_id: int, contact_id: int)
     contact = await session.get(Contact, contact_id)
     if contact is None or contact.shop_id != shop_id:
         raise LedgerError("contact not found")
+
+
+@dataclass(frozen=True)
+class Period:
+    sales: int
+    cashed: int  # paid at the counter on the day of the sale
+    credit: int  # sold on credit
+    repaid: int  # old debts collected
+    mobile_money: int  # collected through mobile money (sales paid + debts repaid)
+    expenses: int
+    supplier_paid: int
+    operations: int
+
+    @property
+    def cash_in_hand(self) -> int:
+        """What should be in the till: money in minus money out."""
+        return self.cashed + self.repaid - self.expenses - self.supplier_paid
+
+
+async def period_summary(session: AsyncSession, *, shop_id: int, start: datetime, end: datetime) -> Period:
+    """Totals over [start, end). Reversals carry negated amounts, so corrections net out."""
+    rows = (
+        await session.exec(
+            select(Entry.kind, Entry.source, Entry.amount, Entry.debt_delta, col(Entry.reverses_entry_id)).where(
+                Entry.shop_id == shop_id, Entry.created_at >= start, Entry.created_at < end
+            )
+        )
+    ).all()
+    sales = cashed = credit = repaid = momo = expenses = supplier_paid = ops = 0
+    for kind, source, amount, delta, reverses in rows:
+        ops += 0 if reverses else 1
+        if kind == EntryKind.SALE:
+            sales += amount
+            credit += delta
+            cashed += amount - delta
+            if source == "mobile_money":
+                momo += amount - delta
+        elif kind == EntryKind.PAYMENT_RECEIVED:
+            repaid += amount
+            if source == "mobile_money":
+                momo += amount
+        elif kind == EntryKind.EXPENSE:
+            expenses += amount
+        elif kind == EntryKind.SUPPLIER_PAYMENT:
+            supplier_paid += amount
+    return Period(sales, cashed, credit, repaid, momo, expenses, supplier_paid, ops)
+
+
+@dataclass(frozen=True)
+class SupplierDue:
+    contact: Contact
+    balance: int
+    due_date: date | None
+
+
+async def supplier_dues(session: AsyncSession, *, shop_id: int) -> list[SupplierDue]:
+    """Suppliers we still owe, earliest due date first (undated last)."""
+    balance = func.sum(Entry.debt_delta).label("balance")
+    due = func.min(Entry.due_date).label("due")
+    query = (
+        select(Contact, balance, due)
+        .join(Entry, col(Entry.contact_id) == Contact.id)
+        .where(Contact.shop_id == shop_id, Entry.shop_id == shop_id, Contact.kind == ContactKind.SUPPLIER)
+        .group_by(col(Contact.id))
+        .having(balance > 0)
+    )
+    rows = (await session.exec(query)).all()
+    result = [SupplierDue(contact=c, balance=int(b), due_date=d) for c, b, d in rows]
+    return sorted(result, key=lambda s: (s.due_date is None, s.due_date or date.max, -s.balance))

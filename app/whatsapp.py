@@ -4,6 +4,7 @@ import logging
 
 import httpx
 
+from app.agent.reply import Reply
 from app.config import Settings
 
 log = logging.getLogger(__name__)
@@ -70,6 +71,85 @@ class WhatsAppClient:
         wamid = data["messages"][0]["id"]
         log.info("sent %s to %s", wamid, to)
         return wamid
+
+    async def send_buttons(
+        self, to: str, body: str, buttons: list[tuple[str, str]], reply_to: str | None = None
+    ) -> str:
+        """Up to 3 quick-reply buttons: (id, title)."""
+        interactive = {
+            "type": "button",
+            "body": {"text": body[:1024]},
+            "action": {"buttons": [{"type": "reply", "reply": {"id": i, "title": title}} for i, title in buttons]},
+        }
+        return await self._send_interactive(to, interactive, reply_to)
+
+    async def send_list(
+        self,
+        to: str,
+        body: str,
+        rows: list[tuple[str, str, str]],
+        button: str = "Choisir",
+        reply_to: str | None = None,
+    ) -> str:
+        """A list of up to 10 choices: (id, title <= 24 chars, description)."""
+        row_payload = [{"id": i, "title": title[:24], **({"description": d[:72]} if d else {})} for i, title, d in rows]
+        interactive = {
+            "type": "list",
+            "body": {"text": body[:1024]},
+            "action": {"button": button[:20], "sections": [{"title": "Choix", "rows": row_payload}]},
+        }
+        return await self._send_interactive(to, interactive, reply_to)
+
+    async def _send_interactive(self, to: str, interactive: dict, reply_to: str | None) -> str:
+        payload: dict = {
+            "messaging_product": "whatsapp", "recipient_type": "individual", "to": to,
+            "type": "interactive", "interactive": interactive,
+        }  # fmt: skip
+        if reply_to:
+            payload["context"] = {"message_id": reply_to}
+        return (await self._post(payload))["messages"][0]["id"]
+
+    async def upload_media(self, data: bytes, mime_type: str, filename: str) -> str:
+        response = await self._http.post(
+            f"{self._base_url}/{self.phone_number_id}/media",
+            headers=self._auth,
+            data={"messaging_product": "whatsapp", "type": mime_type},
+            files={"file": (filename, data, mime_type)},
+        )
+        if response.is_error:
+            raise WhatsAppError(f"media upload {response.status_code}: {response.text}")
+        return response.json()["id"]
+
+    async def send_image(self, to: str, data: bytes, caption: str = "", reply_to: str | None = None) -> str:
+        media_id = await self.upload_media(data, "image/png", "recu.png")
+        payload: dict = {
+            "messaging_product": "whatsapp", "recipient_type": "individual", "to": to, "type": "image",
+            "image": {"id": media_id, **({"caption": caption[:1024]} if caption else {})},
+        }  # fmt: skip
+        if reply_to:
+            payload["context"] = {"message_id": reply_to}
+        return (await self._post(payload))["messages"][0]["id"]
+
+    async def send_template(self, to: str, name: str, params: list[str], language: str = "fr") -> str:
+        """An approved template: the only way to write first, outside the 24 h window."""
+        components = [{"type": "body", "parameters": [{"type": "text", "text": p} for p in params]}] if params else []
+        payload = {
+            "messaging_product": "whatsapp", "to": to, "type": "template",
+            "template": {"name": name, "language": {"code": language}, "components": components},
+        }  # fmt: skip
+        return (await self._post(payload))["messages"][0]["id"]
+
+    async def deliver(self, to: str, reply: Reply, reply_to: str | None = None) -> None:
+        """Send a Reply in the richest form WhatsApp allows."""
+        text = reply.text + (f"\n\n{reply.link}" if reply.link else "")
+        if reply.image:
+            await self.send_image(to, reply.image, text, reply_to)
+        elif reply.rows:
+            await self.send_list(to, text, reply.rows, reply.list_button, reply_to)
+        elif reply.buttons:
+            await self.send_buttons(to, text, reply.buttons, reply_to)
+        elif text:
+            await self.send_text(to, text, reply_to)
 
     async def mark_read(self, wamid: str) -> None:
         await self._post({"messaging_product": "whatsapp", "status": "read", "message_id": wamid})

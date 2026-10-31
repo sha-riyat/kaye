@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <style>
 {% include "_brand.css" %}
+body { margin: 0; }
 .doc { width: 1080px; height: {% block doc_h %}1500{% endblock %}px; background: var(--nuit); display: flex; align-items: center; justify-content: center; }
 .ticket { width: 680px; position: relative; filter: drop-shadow(0 30px 60px rgba(0,0,0,.45)); }
 .paper { background: var(--papier); border-radius: 14px 14px 0 0; overflow: hidden; }
@@ -60,9 +61,9 @@
       <div class="kente"></div>
       <div class="body">
         <div class="head">
-          <div class="shop-logo" aria-label="Logo de {{ shop.name }}">{{ shop.initial }}</div>
+          <div class="shop-logo" aria-label="Logo de {{ shop.name }}">{% if shop.get('logo_url') %}<img src="{{ shop.logo_url }}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">{% else %}{{ shop.initial }}{% endif %}</div>
           <span class="name display">{{ shop.name }}</span>
-          <span class="meta">{{ shop.activity }} · {{ shop.address }}<br>{{ shop.phone }}</span>
+          <span class="meta">{{ [shop.activity, shop.address] | select | join(' · ') }}{% if shop.activity or shop.address %}<br>{% endif %}{{ shop.phone }}</span>
         </div>
         <div class="rule"></div>
         {% block head_meta %}{% endblock %}

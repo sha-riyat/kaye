@@ -19,9 +19,7 @@ PAY_TO = [
 
 
 def _lines(*rows: tuple[str, str, int, int]) -> list[dict]:
-    return [
-        {"product": p, "detail": d, "quantity": q, "unit_price": u, "total": q * u} for p, d, q, u in rows
-    ]
+    return [{"product": p, "detail": d, "quantity": q, "unit_price": u, "total": q * u} for p, d, q, u in rows]
 
 
 def receipt() -> dict:
