@@ -247,7 +247,7 @@ def describe(pending: PendingAction) -> str:
         lines = "\n".join(
             f"{_qty(ln)} {ln['product']} × {money(ln['unit_price'])} = {money(ln['total'])}" for ln in p["lines"]
         )
-        who = f" à {_who(p['party'])}" if p["party"]["name"] else ""
+        who = f" à {_who(p['party'])}" if p["party"]["name"] else " · client de passage"
         out = f"*Vente{who}*\n{lines}\nTotal : *{money(p['total'])} FCFA*"
         if p["paid"] < p["total"]:
             out += f"\nPayé : {money(p['paid'])} · Reste dû : *{money(p['total'] - p['paid'])}*"
@@ -348,8 +348,12 @@ async def propose_sale(ctx: Ctx, a: s.ProposeSale) -> list[Reply]:
     else:
         paid = total
     party = await _resolve_party(ctx, a.customer, ContactKind.CUSTOMER)
-    if paid < total and not party["name"]:
-        return await _clarify(ctx, "Cette vente reste en partie à payer : pour quel client ?", _original(ctx, a))
+    if not party["name"] and (paid < total or not a.walk_in):
+        goods = ", ".join(f"{ln['quantity']} {ln['product']}" for ln in lines)
+        question = f"À qui avez-vous vendu {goods} ? Un seul client, plusieurs, ou un client de passage ?"
+        if paid < total:
+            question = f"Qui doit le reste pour {goods} ?"
+        return await _clarify(ctx, question, _original(ctx, a))
     payload = {"party": party, "lines": lines, "total": total, "paid": paid, "warning": warning}
     return await _propose(ctx, "sale", payload, party)
 

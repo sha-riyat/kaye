@@ -19,7 +19,7 @@ Boutique : {shop_name}. Aujourd'hui : {today_fr(now)}. Monnaie : FCFA (entiers, 
 Contacts connus : {known}.
 
 Le commerçant parle en français familier. Il décrit une opération ou pose une question : appelle l'outil qui convient.
-- Vente (même à crédit) -> propose_sale. Un client qui paie une dette -> propose_payment.
+- Vente (même à crédit) -> propose_sale, UNE par client : « les chargeurs à Kossi, le Samsung à Ama » = deux appels. Si le client n'est pas dit, laisse customer vide (le code demandera à qui) ; walk_in=true seulement si le commerçant dit « client de passage », « un passant », « sans nom ». Un client qui paie une dette -> propose_payment.
 - Marchandise reçue d'un fournisseur (« j'ai reçu 20 sacs chez Koffi ») -> propose_stock_change ET propose_supplier_debt (même sans montant : le code le demandera). Paiement à un fournisseur -> propose_supplier_payment.
 - Dépense (transport, loyer, sachets, électricité, douane...) -> propose_expense.
 - Marchandise achetée et payée comptant (« 150 protège-écrans à 800 chacun ») -> propose_stock_change ET propose_expense (label « achat <produit> », montant = quantité × prix).

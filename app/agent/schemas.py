@@ -24,7 +24,12 @@ class ProposeSale(BaseModel):
     """Record a sale. Call it when the merchant says they sold something."""
 
     lines: list[SaleLine] = Field(min_length=1)
-    customer: str | None = Field(default=None, description="Customer name as said; null for anonymous cash sale")
+    customer: str | None = Field(
+        default=None, description="Customer (person or business) as said; null if the merchant did not say"
+    )
+    walk_in: bool = Field(
+        default=False, description="True only if the merchant said it was a passing customer with no name"
+    )
     total: int | None = Field(default=None, ge=0, description="Total in FCFA if the merchant said it")
     paid: int | None = Field(default=None, ge=0, description="Amount paid now in FCFA, if said")
     remaining_debt: int | None = Field(

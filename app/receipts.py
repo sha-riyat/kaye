@@ -64,7 +64,7 @@ def receipt_data(shop: dict, entry: Entry, number: int, customer: str, when: dat
         "date": f"{when:%d/%m/%Y}",
         "time": f"{when:%H:%M}",
         "date_long": f"{when:%d/%m/%Y}",
-        "customer": customer or "Client",
+        "customer": customer or "Client de passage",
         "lines": lines,
         "total": entry.amount,
         "paid": entry.amount - due,
@@ -83,18 +83,20 @@ def _chromium() -> str:
 
 
 async def render_png(template: str, data: dict, extra_height: int = 0) -> bytes:
-    """Render a document template to a 1080 px wide PNG. `extra_height` makes room for long documents."""
+    """Render a document template to a PNG of the ticket alone. `extra_height` makes room for long ones."""
     html = render(template, data, asset_base=ASSETS.as_uri())
     match = re.search(r"\.doc \{ width: 1080px; height: (\d+)px", html)
     height = (int(match.group(1)) if match else 1500) + extra_height
     if match:
         html = html.replace(match.group(0), f".doc {{ width: 1080px; height: {height}px", 1)
+    html = html.replace("</head>", BARE_CSS + "</head>", 1)
     with tempfile.TemporaryDirectory() as tmp:
         page, out = Path(tmp) / "doc.html", Path(tmp) / "doc.png"
         page.write_text(html)
         proc = await asyncio.create_subprocess_exec(
             _chromium(), "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
             "--allow-file-access-from-files", f"--window-size=1080,{height}", "--virtual-time-budget=8000",
+            "--default-background-color=00000000", f"--force-device-scale-factor={SCALE}",
             f"--screenshot={out}", page.as_uri(),
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
         )  # fmt: skip
@@ -105,7 +107,29 @@ async def render_png(template: str, data: dict, extra_height: int = 0) -> bytes:
             raise RenderError("Chromium timed out") from None
         if not out.exists():
             raise RenderError("Chromium produced no image")
-        return out.read_bytes()
+        return _crop_to_ticket(out.read_bytes())
+
+
+# The document alone: no dark page around it, no drop shadow. Transparent outside the paper, so the
+# torn edge shows the chat background, like a real ticket laid on the screen.
+BARE_CSS = (
+    "<style>html, body, .doc { background: transparent !important; } .ticket { filter: none !important; }</style>"
+)
+SCALE = 2  # 680 css px of ticket -> 1360 px image: sharp on any phone
+
+
+def _crop_to_ticket(png: bytes) -> bytes:
+    import io
+
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(png)).convert("RGBA")
+    box = image.getchannel("A").getbbox()
+    if box:
+        image = image.crop(box)
+    out = io.BytesIO()
+    image.save(out, "PNG", optimize=True)
+    return out.getvalue()
 
 
 def extra_height(line_count: int) -> int:

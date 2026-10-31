@@ -214,7 +214,10 @@ async def test_credit_sale_needs_a_yes_then_sends_a_receipt(chat, db):
 
 
 async def test_the_model_cannot_set_a_wrong_total(chat):
-    sale = ("propose_sale", {"lines": [{"product": "riz", "quantity": 3, "unit_price": 11_000}], "total": 30_000})
+    sale = (
+        "propose_sale",
+        {"lines": [{"product": "riz", "quantity": 3, "unit_price": 11_000}], "total": 30_000, "walk_in": True},
+    )
     replies = await chat.say("3 riz à 11 000, total 30 000", sale)
     assert "Total : *33 000" in replies[0].text
     assert "30 000" in replies[0].text and "calcul donne" in replies[0].text
@@ -388,7 +391,8 @@ async def test_a_delivery_is_one_recap_with_one_set_of_buttons(chat, db):
     assert "Achat chez Koffi" in recap and "06/11/2026" in recap and "0 → *20*" in recap
     assert recap.endswith("Je note tout ?") and len(replies[0].buttons) == 3
     done = await chat.tap(replies[0].buttons[0][0])
-    assert len(done) == 1 and "180 000 FCFA à Koffi" in done[0].text and "Stock de riz : *20*" in done[0].text
+    assert len(done) == 1 and done[0].text.count("C'est noté") == 1
+    assert "• Vous devez 180 000 FCFA à Koffi" in done[0].text and "• Stock de riz : *20*" in done[0].text
     assert await balance(db, "Koffi") == 180_000
     due = await chat.send(text="qui je dois payer ?")
     assert "Koffi : *180 000" in due[0].text and "06/11" in due[0].text
@@ -644,3 +648,33 @@ async def test_a_receipt_can_be_asked_again_with_the_same_number(chat):
     assert again[0].image and "Reçu n° 0001 pour Ama Koudjo" in again[0].text
     by_name = await chat.say("renvoie le reçu d'Ama", ("resend_receipt", {"customer": "Ama"}))
     assert "Reçu n° 0001" in by_name[0].text
+
+
+async def test_an_unnamed_sale_asks_who_bought_before_any_receipt(chat, db):
+    unnamed = ("propose_sale", {"lines": [{"product": "chargeurs", "quantity": 25, "unit_price": 1_500},
+                                          {"product": "Samsung", "quantity": 1, "unit_price": 80_000}]})  # fmt: skip
+    asked = await chat.say("vendu 25 chargeurs et un Samsung", unnamed)
+    assert (
+        asked[0].text
+        == "À qui avez-vous vendu 25 chargeurs, 1 Samsung ? Un seul client, plusieurs, ou un client de passage ?"
+    )
+    assert asked[0].buttons == []
+    to_kossi = (
+        "propose_sale",
+        {"lines": [{"product": "chargeurs", "quantity": 25, "unit_price": 1_500}], "customer": "Kossi"},
+    )
+    to_ama = (
+        "propose_sale",
+        {"lines": [{"product": "Samsung", "quantity": 1, "unit_price": 80_000}], "customer": "Ama"},
+    )
+    recap = await chat.say("les chargeurs à Kossi, le Samsung à Ama", [to_kossi, to_ama])
+    assert len(recap) == 1 and "Vente à Kossi" in recap[0].text and "Vente à Ama" in recap[0].text
+    done = await chat.tap(recap[0].buttons[0][0])
+    receipts = [r for r in done if r.image]
+    assert len(receipts) == 2 and "pour Kossi" in receipts[0].text and "pour Ama" in receipts[1].text
+
+
+async def test_a_walk_in_sale_needs_no_name(chat):
+    walk_in = ("propose_sale", {"lines": [{"product": "pain", "quantity": 2, "unit_price": 250}], "walk_in": True})
+    recap = await chat.say("2 pains, client de passage", walk_in)
+    assert "Vente · client de passage" in recap[0].text and recap[0].buttons

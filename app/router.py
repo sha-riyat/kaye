@@ -220,6 +220,15 @@ async def _on_button(ctx: Ctx, svc: Services, button_id: str) -> list[Reply]:
     return [Reply("Je n'ai pas compris ce bouton.")]
 
 
+def _one_confirmation(texts: list[str]) -> str:
+    """« C'est noté. » once, then what each operation changed."""
+    if len(texts) == 1:
+        return texts[0]
+    details = [t.removeprefix("C'est noté").lstrip(" .:").strip() for t in texts]
+    details = [d[0].upper() + d[1:] for d in details if d]
+    return "C'est noté. ✅" + "".join(f"\n• {d}" for d in details)
+
+
 async def _batch_items(ctx: Ctx, pending) -> list:
     if pending.kind != "batch":
         return []
@@ -241,7 +250,7 @@ async def _confirm(ctx: Ctx, svc: Services, pending) -> list[Reply]:
         await queries.settle_pending(ctx.session, pending, PendingStatus.CONFIRMED)
     if not texts:
         return [Reply("Cette proposition a déjà été traitée.")]
-    replies = [Reply("\n".join(texts)), *receipts]
+    replies = [Reply(_one_confirmation(texts)), *receipts]
     if pending.payload.get("then_summary"):
         await ctx.session.flush()
         replies.append(Reply(await actions.summary_text(ctx.session, ctx.shop, "today", ctx.now)))
