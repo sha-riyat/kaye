@@ -634,3 +634,13 @@ async def test_a_summary_asked_with_operations_comes_after_the_yes(chat):
     assert (
         "Bilan du jour" in done[-1].text and "Ventes : *33 000" in done[-1].text and "Sorties : 5 000" in done[-1].text
     )
+
+
+async def test_a_receipt_can_be_asked_again_with_the_same_number(chat):
+    sale = await chat.say("vente", SALE)
+    first = await chat.tap(sale[0].buttons[0][0])
+    assert "Reçu n° 0001" in first[1].text
+    again = await chat.send(text="reçu")  # shortcut
+    assert again[0].image and "Reçu n° 0001 pour Ama Koudjo" in again[0].text
+    by_name = await chat.say("renvoie le reçu d'Ama", ("resend_receipt", {"customer": "Ama"}))
+    assert "Reçu n° 0001" in by_name[0].text

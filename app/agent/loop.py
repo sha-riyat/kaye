@@ -27,6 +27,8 @@ SHORTCUTS = {
     "qui je dois payer": "list_supplier_dues", "mes fournisseurs": "list_supplier_dues",
     "stock": "stock_levels", "mon stock": "stock_levels", "le stock": "stock_levels",
     "annule": "propose_correction", "annuler": "propose_correction",
+    "recu": "resend_receipt", "le recu": "resend_receipt", "mon recu": "resend_receipt",
+    "renvoie le recu": "resend_receipt",
 }  # fmt: skip
 
 

@@ -7,6 +7,8 @@ action in the database.
 import logging
 from dataclasses import dataclass, field
 
+from sqlmodel import select
+
 from app.agent import actions
 from app.agent.actions import Ctx
 from app.agent.prompts import AFTER_NAME, DEMO_NOTICE, WELCOME
@@ -98,6 +100,7 @@ async def _process(session, svc: Services, msg: InboundMessage, text: str | None
 
     ctx = Ctx(session=session, shop=shop, user=user, wamid=msg.wamid, source=source)
     replies = await _handle(ctx, svc, msg, text, media_bytes, mime)
+    replies = [await _receipt_reply(ctx, svc, int(r.text)) if r.kind == "receipt" else r for r in replies]
     said = (
         text if msg.type in ("text", "audio") else ("[photo]" if msg.type == "image" else f"[{msg.text or 'bouton'}]")
     )
@@ -256,7 +259,8 @@ async def _receipt_reply(ctx: Ctx, svc: Services, entry_id: int) -> Reply:
                 logo = await svc.storage.get(ctx.shop.logo_key)
             except Exception:
                 log.exception("logo unavailable")
-        number = await queries.next_receipt_number(ctx.session, ctx.shop.id)
+        existing = (await ctx.session.exec(select(Receipt).where(Receipt.entry_id == entry.id))).first()
+        number = existing.number if existing else await queries.next_receipt_number(ctx.session, ctx.shop.id)
         customer = ""
         if entry.contact_id:
             from app.db.models import Contact
@@ -271,7 +275,8 @@ async def _receipt_reply(ctx: Ctx, svc: Services, entry_id: int) -> Reply:
         if svc.storage is not None:
             key = media_key(ctx.shop.id, "receipt", "image/png")
             await svc.storage.put(key, png, "image/png")
-        ctx.session.add(Receipt(shop_id=ctx.shop.id, entry_id=entry.id, number=number, image_key=key))
+        if existing is None:
+            ctx.session.add(Receipt(shop_id=ctx.shop.id, entry_id=entry.id, number=number, image_key=key))
         who = f" pour {customer}" if customer else ""
         return Reply(f"Reçu n° {number:04d}{who}. Transférez-le à votre client ↗", image=png)
     except (RenderError, OSError):

@@ -82,10 +82,11 @@ READ_TOOLS: dict[str, type[BaseModel]] = {
     "summary": s.SummaryRequest,
     "stock_levels": s.StockQuestion,
     "draft_reminder": s.CustomerName,
+    "resend_receipt": s.ReceiptRequest,
 }
 TOOL_MODELS = {**WRITE_TOOLS, **READ_TOOLS}
 
-SELLER_TOOLS = {"propose_sale", "stock_levels"}
+SELLER_TOOLS = {"propose_sale", "stock_levels", "resend_receipt"}
 SELLER_REFUSAL = "Cette demande est réservée au patron de la boutique. Vous pouvez noter vos ventes."
 
 REPHRASE = "Je n'ai pas bien compris. Pouvez-vous le redire plus simplement, avec le nom et le montant ?"
@@ -188,7 +189,7 @@ async def merge(ctx: Ctx, replies: list[Reply]) -> list[Reply]:
     """
     proposals = [r for r in replies if r.kind == "proposal"]
     questions = [r for r in replies if r.kind == "question"]
-    others = [r for r in replies if r.kind not in ("proposal", "question")]
+    others = [r for r in replies if r.kind not in ("proposal", "question")]  # infos, choices, receipts
     missing = "\n".join(f"❓ {q.text}" for q in questions)
 
     if not proposals:
@@ -580,6 +581,28 @@ async def stock_levels(ctx: Ctx, a: s.StockQuestion) -> list[Reply]:
     return [Reply("*Votre stock :*\n" + "\n".join(lines))]
 
 
+async def resend_receipt(ctx: Ctx, a: s.ReceiptRequest) -> list[Reply]:
+    """Finds the sale; the router renders the image (it needs the renderer and storage)."""
+    from sqlmodel import col, select
+
+    from app.db.models import Entry
+
+    query = select(Entry).where(
+        Entry.shop_id == ctx.shop.id, Entry.kind == EntryKind.SALE, col(Entry.reverses_entry_id).is_(None)
+    )
+    if a.customer:
+        matches = await queries.find_contacts(ctx.session, ctx.shop.id, a.customer, ContactKind.CUSTOMER)
+        if len(matches) != 1:
+            return [Reply(f"Pour quel client ? Je ne trouve pas « {a.customer} » avec certitude.")]
+        query = query.where(Entry.contact_id == matches[0].id)
+    if ctx.user.role != "owner":
+        query = query.where(Entry.created_by == ctx.user.id)
+    entry = (await ctx.session.exec(query.order_by(col(Entry.id).desc()).limit(1))).first()
+    if entry is None:
+        return [Reply("Je ne trouve pas de vente à mettre sur un reçu.")]
+    return [Reply(str(entry.id), kind="receipt")]
+
+
 async def draft_reminder(ctx: Ctx, a: s.CustomerName) -> list[Reply]:
     matches = await queries.find_contacts(ctx.session, ctx.shop.id, a.name, ContactKind.CUSTOMER)
     if len(matches) != 1:
@@ -618,6 +641,7 @@ HANDLERS = {
     "summary": summary,
     "stock_levels": stock_levels,
     "draft_reminder": draft_reminder,
+    "resend_receipt": resend_receipt,
 }
 
 

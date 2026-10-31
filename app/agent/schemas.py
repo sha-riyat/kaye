@@ -86,6 +86,12 @@ class CustomerName(BaseModel):
     name: str
 
 
+class ReceiptRequest(BaseModel):
+    """Send again the receipt of the last sale, or of the last sale to this customer."""
+
+    customer: str | None = None
+
+
 class StockQuestion(BaseModel):
     """Ask how much stock is left of a product, or of everything if product is null."""
 
