@@ -46,6 +46,7 @@ class Ctx:
     text: str = ""  # what the merchant said (or the voice transcript)
     media: object | None = None  # MetaMedia: SAM and Muse Image
     image: tuple[bytes, str] | None = None  # the photo being read, for SAM
+    erased: bool = False  # the merchant just erased their shop
     replaying: bool = False  # this message answers our question: its other operations were proposed already
     summary_after: bool = False  # the merchant asked for a summary in the same message: send it after "Oui"
     now: datetime = field(default_factory=queries.utcnow)
@@ -87,6 +88,7 @@ READ_TOOLS: dict[str, type[BaseModel]] = {
     "draft_reminder": s.CustomerName,
     "resend_receipt": s.ReceiptRequest,
     "create_logo": s.NoArgs,
+    "erase_my_data": s.NoArgs,
 }
 TOOL_MODELS = {**WRITE_TOOLS, **READ_TOOLS}
 
@@ -302,6 +304,11 @@ def describe(pending: PendingAction) -> str:
         return (
             f"*Ajouter {who} comme vendeur*\nIl pourra noter des ventes, "
             "sans voir les totaux ni les dettes.\n\nJe l'ajoute ?"
+        )
+    if kind == "erase":
+        return (
+            "*Supprimer toutes vos données ?*\nVentes, dettes, clients, stock, photos, vocaux et reçus seront "
+            "effacés pour de bon. Vos vendeurs perdront l'accès. Cela ne peut pas être annulé."
         )
     if kind == "correction":
         return f"*Annuler cette opération ?*\n{p['label']}\n\nElle sera annulée, sans rien effacer du cahier."
@@ -636,6 +643,11 @@ async def resend_receipt(ctx: Ctx, a: s.ReceiptRequest) -> list[Reply]:
     return [Reply(str(entry.id), kind="receipt")]
 
 
+async def erase_my_data(ctx: Ctx, _: s.NoArgs) -> list[Reply]:
+    """The right to erasure promised in the privacy policy. Only the owner, only after a "Oui"."""
+    return await _propose(ctx, "erase", {"shop_id": ctx.shop.id})
+
+
 async def create_logo(ctx: Ctx, _: s.NoArgs) -> list[Reply]:
     """Drawn by the router (Muse Image, then R2): it needs storage and several image messages."""
     return [Reply("", kind="logo")]
@@ -682,6 +694,7 @@ HANDLERS = {
     "resend_receipt": resend_receipt,
     "shelf_photo": shelf_photo,
     "create_logo": create_logo,
+    "erase_my_data": erase_my_data,
 }
 
 

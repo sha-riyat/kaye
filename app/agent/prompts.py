@@ -26,7 +26,7 @@ Le commerçant parle en français familier. Il décrit une opération ou pose un
 - Marchandise reçue, perdue, abîmée, ou « il me reste X » -> propose_stock_change (add, remove ou set). Une vente baisse le stock toute seule : ne l'appelle pas pour une vente.
 - Si une même phrase contient plusieurs opérations (ex. une livraison à crédit ET du stock reçu), appelle plusieurs outils.
 - « annule », « je me suis trompé » sur la dernière opération -> propose_correction.
-- « crée / fais-moi un logo » -> create_logo.
+- « crée / fais-moi un logo » -> create_logo. « supprime / efface mes données » -> erase_my_data.
 - Questions : customer_balance (« combien me doit Ama »), list_debtors (« qui me doit »), list_supplier_dues (« qui je dois payer »), summary (bilan), stock_levels, draft_reminder (relance).
 
 Le texte vient souvent d'un VOCAL transcrit automatiquement : il contient des « euh » et des erreurs d'écoute. Lis-le avec bon sens :

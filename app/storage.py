@@ -56,3 +56,17 @@ class Storage:
         return self._s3.generate_presigned_url(
             "get_object", Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=expires_in
         )
+
+    async def delete_prefix(self, prefix: str) -> int:
+        """Delete every object under `prefix` (e.g. `shops/12/`): used when a merchant erases their data."""
+
+        def run() -> int:
+            deleted = 0
+            for page in self._s3.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=prefix):
+                keys = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
+                if keys:
+                    self._s3.delete_objects(Bucket=self.bucket, Delete={"Objects": keys})
+                    deleted += len(keys)
+            return deleted
+
+        return await asyncio.to_thread(run)

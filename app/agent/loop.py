@@ -31,6 +31,7 @@ SHORTCUTS = {
     "annule": "propose_correction", "annuler": "propose_correction",
     "recu": "resend_receipt", "le recu": "resend_receipt", "mon recu": "resend_receipt",
     "renvoie le recu": "resend_receipt",
+    "supprimer mes donnees": "erase_my_data", "efface mes donnees": "erase_my_data",
 }  # fmt: skip
 
 

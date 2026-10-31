@@ -375,3 +375,24 @@ async def recent_turns(session: AsyncSession, user_id: int) -> list[MessageLog]:
         .limit(MEMORY_TURNS)
     )
     return list(reversed((await session.exec(query)).all()))
+
+
+# --- erasure ---
+
+ERASE_ORDER = [
+    "receipt", "entry", "pending_action", "message_log", "unit_price", "product", "contact", "media", "model_call",
+]  # fmt: skip
+
+
+async def erase_shop_data(session: AsyncSession, shop_id: int) -> None:
+    """Delete everything a shop recorded, its users and the shop itself: the next message from the
+    owner is a first contact again."""
+    from sqlalchemy import text
+
+    await session.exec(
+        text("DELETE FROM entry WHERE shop_id = :s AND reverses_entry_id IS NOT NULL").bindparams(s=shop_id)
+    )
+    for table in ERASE_ORDER:
+        await session.exec(text(f"DELETE FROM {table} WHERE shop_id = :s").bindparams(s=shop_id))
+    await session.exec(text("DELETE FROM app_user WHERE shop_id = :s").bindparams(s=shop_id))
+    await session.exec(text("DELETE FROM shop WHERE id = :s").bindparams(s=shop_id))

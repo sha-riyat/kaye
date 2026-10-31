@@ -34,6 +34,7 @@ QUOTA_REPLY = "Vous avez beaucoup écrit aujourd'hui : je reprends demain. À tr
 BUDGET_REPLY = "Je suis très sollicité en ce moment. Pouvez-vous réessayer un peu plus tard ?"
 NAME_FIRST_REPLY = "Avant de commencer : comment s'appelle votre boutique ? (quelques mots suffisent)"
 SHOP_NAME_MAX = 60
+GREETINGS = {"bonjour", "bonsoir", "salut", "hello", "coucou", "ok", "oui", "merci", "bjr", "slt", "yo", "hi"}
 
 
 @dataclass
@@ -115,6 +116,8 @@ async def _process(session, svc: Services, msg: InboundMessage, text: str | None
         else:
             expanded.append(r)
     replies = expanded
+    if ctx.erased:
+        return replies  # the shop and its history are gone: nothing to remember
     said = (
         text if msg.type in ("text", "audio") else ("[photo]" if msg.type == "image" else f"[{msg.text or 'bouton'}]")
     )
@@ -160,7 +163,7 @@ async def _guard(ctx: Ctx, svc: Services) -> Reply | None:
 
 async def _name_shop(session, shop: Shop, text: str | None) -> list[Reply]:
     name = (text or "").strip().strip("«»\"'").strip()
-    if not name or len(name) > SHOP_NAME_MAX or "\n" in name:
+    if not name or len(name) > SHOP_NAME_MAX or "\n" in name or queries.norm(name).strip(" !.") in GREETINGS:
         return [Reply(NAME_FIRST_REPLY)]
     shop.name = name
     session.add(shop)
@@ -194,6 +197,16 @@ async def _save_logo(ctx: Ctx, svc: Services, data: bytes, mime: str) -> Reply:
     ctx.shop.logo_key = key
     ctx.session.add(ctx.shop)
     return Reply("Merci ! Votre logo sera sur tous vos prochains reçus. ✅")
+
+
+async def _erase(ctx: Ctx, svc: Services) -> Reply:
+    files = 0
+    if svc.storage is not None:
+        files = await svc.storage.delete_prefix(f"shops/{ctx.shop.id}/")
+    await queries.erase_shop_data(ctx.session, ctx.shop.id)
+    ctx.erased = True
+    log.info("shop %s erased its data (%d files)", ctx.shop.id, files)
+    return Reply("C'est fait : toutes vos données sont effacées. Écrivez-moi quand vous voulez pour recommencer.")
 
 
 LOGO_COUNT = 3
@@ -286,6 +299,8 @@ async def _batch_items(ctx: Ctx, pending) -> list:
 
 async def _confirm(ctx: Ctx, svc: Services, pending) -> list[Reply]:
     """Apply one proposal, or every operation of a grouped recap, then send one confirmation."""
+    if pending.kind == "erase":
+        return [await _erase(ctx, svc)]
     items = await _batch_items(ctx, pending) if pending.kind == "batch" else [pending]
     texts, receipts = [], []
     for item in items:

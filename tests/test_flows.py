@@ -729,3 +729,25 @@ async def test_create_logo_offers_three_and_keeps_the_chosen_one(chat, db):
     async with db.session() as s:
         key = (await s.exec(select(Shop))).one().logo_key
     assert chat.svc.storage.files[key] == b"PNG1"
+
+
+async def test_erase_my_data_wipes_everything_after_a_yes(chat, db):
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])
+    asked = await chat.send(text="supprimer mes données")  # shortcut
+    assert "Supprimer toutes vos données" in asked[0].text
+    done = await chat.tap(asked[0].buttons[0][0])
+    assert "toutes vos données sont effacées" in done[0].text
+    async with db.session() as s:
+        assert (await s.exec(select(Entry))).all() == [] and (await s.exec(select(Contact))).all() == []
+        assert (await s.exec(select(Shop))).all() == []
+    again = await chat.send(text="Bonjour")
+    assert "comment s'appelle votre boutique" in again[0].text.lower()  # a first contact again
+
+
+async def test_a_greeting_is_never_taken_as_the_shop_name(db, models):
+    wa = FakeWA()
+    c = Chat(Services(Settings(_env_file=None), wa, FakeTranscriber(), db, Agent(models), None), models, wa)
+    await c.send(text="Bonjour")
+    again = await c.send(text="Salut !")
+    assert "comment s'appelle votre boutique" in again[0].text.lower()
