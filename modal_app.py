@@ -54,7 +54,8 @@ async def hourly_jobs() -> None:
         await svc.aclose()
 
 
-@app.function(image=image, secrets=secrets)
+# One warm container: Meta expects an answer in about a second, which a cold start would miss.
+@app.function(image=image, secrets=secrets, min_containers=1)
 @modal.concurrent(max_inputs=50)
 @modal.asgi_app(label="kaye-webhook")
 def web():
