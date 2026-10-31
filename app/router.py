@@ -46,12 +46,12 @@ async def handle_message(msg: InboundMessage, svc: Services) -> None:
     wa = svc.wa.from_number(msg.phone_number_id)
     await wa.mark_read(msg.wamid)
 
-    text, source, media_bytes, mime = msg.text, EntrySource.TEXT, None, ""
+    text, source, media_bytes, mime, voice = msg.text, EntrySource.TEXT, None, "", None
     try:
         if msg.type == "audio" and msg.media_id:
             media_bytes, mime = await wa.download_media(msg.media_id)
             mime = mime or "audio/ogg"
-            transcript = await svc.transcriber.transcribe(media_bytes)
+            transcript = voice = await svc.transcriber.transcribe(media_bytes)
             if not transcript.text:
                 await wa.send_text(msg.sender, EMPTY_AUDIO_REPLY, reply_to=msg.wamid)
                 return
@@ -74,7 +74,7 @@ async def handle_message(msg: InboundMessage, svc: Services) -> None:
     outcome = Outcome()
     try:
         async with svc.db.session() as session:
-            outcome.replies = await _process(session, svc, msg, text, source, media_bytes, mime)
+            outcome.replies = await _process(session, svc, msg, text, source, media_bytes, mime, voice)
     except Exception:
         log.exception("processing %s failed", msg.wamid)
         outcome.replies = [
@@ -89,7 +89,7 @@ async def handle_message(msg: InboundMessage, svc: Services) -> None:
 
 
 async def _process(session, svc: Services, msg: InboundMessage, text: str | None, source: str,
-                   media_bytes: bytes | None, mime: str) -> list[Reply]:  # fmt: skip
+                   media_bytes: bytes | None, mime: str, voice=None) -> list[Reply]:  # fmt: skip
     user = await queries.user_by_whatsapp(session, msg.sender)
     if user is None:
         await queries.create_shop_with_owner(session, msg.sender, msg.profile_name)
@@ -100,6 +100,11 @@ async def _process(session, svc: Services, msg: InboundMessage, text: str | None
         return await _name_shop(session, shop, text if msg.type in ("text", "audio") else None)
 
     ctx = Ctx(session=session, shop=shop, user=user, wamid=msg.wamid, source=source, media=svc.media)
+    if voice is not None:
+        await queries.log_model_call(
+            session, shop_id=shop.id, model=svc.settings.transcribe_model, tokens_in=0, tokens_out=0,
+            cost_usd=voice.cost_usd, audio_ms=voice.audio_duration_ms,
+        )  # fmt: skip
     replies = await _handle(ctx, svc, msg, text, media_bytes, mime)
     expanded: list[Reply] = []
     for r in replies:
