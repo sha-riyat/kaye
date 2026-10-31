@@ -10,7 +10,7 @@ of teeth, which also reads as a voice wave: Kayé listens, then writes it down.
 | `lockup-night.svg`, `lockup-cauri.svg` | Symbol + wordmark |
 | `profile-*-640.png` | WhatsApp profile picture (cropped to a circle by WhatsApp) |
 | `pattern-kente.svg` | Pattern inspired by Ewe kente strip weaving, built from brand shapes |
-| `icons/*.svg` | Icon set: bold filled shapes on a 32 px grid, Nuit body, one Solaire element carrying the meaning |
+| `icons/*.svg` | Icon set cut like adinkra stamps: organic filled shapes on a 64 px grid, Nuit, punctuated by Solaire dots (coins, seeds, cowries). Cuts are drawn in Cauri, so use them on a Cauri background |
 
 **Colours**: Nuit de Lomé `#14111B`, Cauri `#F5E9D6`, Solaire `#FF7A1F`, Latérite `#B84A1E`
 (amounts still due), Lagune `#17705F` (paid).
