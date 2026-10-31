@@ -55,6 +55,21 @@ Then in the Meta dashboard (WhatsApp → Configuration → Webhook), set the cal
 `https://<your-modal-url>/webhook`, the verify token to `WHATSAPP_VERIFY_TOKEN`, and subscribe to the
 `messages` field.
 
+## Design canvas for documents
+
+Receipts, invoices and reminders Kayé sends are HTML templates (`app/documents/templates`). A local
+canvas shows every template live with fictitious data, so variants can be compared side by side:
+
+```bash
+uv run uvicorn design.server:app --reload --reload-dir app/documents --reload-dir design --port 8765
+# open http://localhost:8765
+```
+
+Items live in `design/registry.py` (stable id, readable name, template, fixture, size). To try
+another version, add an entry; to iterate, edit the template: open previews refresh by themselves.
+Drag the background to pan, Ctrl/⌘ + wheel or pinch to zoom, drag the ⋮⋮ handle to move an item,
+click a name to copy it.
+
 ## Built during the hackathon
 
 All code in this repository was written during the event; see the commit history.

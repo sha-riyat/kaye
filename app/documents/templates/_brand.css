@@ -1,0 +1,27 @@
+/* Kayé brand tokens shared by every document. */
+:host, .doc {
+  --nuit: #14111B;
+  --cauri: #F5E9D6;
+  --papier: #FFFDF8;
+  --solaire: #FF7A1F;
+  --laterite: #B84A1E;
+  --lagune: #17705F;
+  --gris: #5E5568;
+  --trait: #D6C8AE;
+  --display: 'Bricolage Grotesque', Inter, system-ui, sans-serif;
+  --text: Inter, system-ui, sans-serif;
+}
+.doc {
+  box-sizing: border-box;
+  font-family: var(--text);
+  color: var(--nuit);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+.doc *, .doc *::before, .doc *::after { box-sizing: border-box; }
+.display { font-family: var(--display); letter-spacing: -0.02em; }
+.shop-logo {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--laterite); color: var(--papier);
+  font-family: var(--display); font-weight: 700;
+}

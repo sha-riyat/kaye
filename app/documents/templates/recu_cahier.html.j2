@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Reçu n° {{ number }} · {{ shop.name }}</title>
+<style>
+{% include "_brand.css" %}
+.doc {
+  width: 1080px; height: 1500px; position: relative; overflow: hidden;
+  background-color: #FBF7EE;
+  background-image: repeating-linear-gradient(180deg, transparent 0, transparent 55px, #C8D5EA 55px, #C8D5EA 56px);
+  background-position: 0 24px;
+}
+.kente { position: absolute; left: 0; top: 0; bottom: 0; width: 44px; background: url("{{ asset('pattern-kente.svg') }}") 0 0 / 600px auto repeat-y; }
+.margin { position: absolute; left: 150px; top: 0; bottom: 0; width: 3px; background: #E07A6A; }
+.page { position: absolute; left: 186px; right: 72px; top: 80px; display: flex; flex-direction: column; }
+.ln { height: 56px; display: flex; align-items: center; justify-content: space-between; font-size: 22px; }
+.head { height: 112px; display: flex; align-items: center; justify-content: space-between; }
+.head .who { display: flex; align-items: center; gap: 18px; }
+.head .shop-logo { width: 80px; height: 80px; border-radius: 50%; font-size: 40px; }
+.head .name { font-size: 36px; font-weight: 700; display: block; }
+.head .meta { font-size: 16px; color: var(--gris); }
+.head .number { font-family: var(--display); font-size: 22px; font-weight: 700; letter-spacing: .04em; }
+.ln.small { font-size: 20px; }
+.ln .num { font-weight: 600; }
+.ln.total .num, .ln.due .num { font-family: var(--display); font-size: 34px; font-weight: 700; }
+.ln.paid { color: var(--lagune); font-weight: 600; }
+.ln.due { color: var(--laterite); font-weight: 700; }
+.stamp {
+  position: absolute; right: 120px; top: 1010px; width: 280px; height: 280px; border-radius: 50%;
+  border: 6px solid var(--solaire); color: var(--solaire); transform: rotate(-12deg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; opacity: .92;
+}
+.stamp::before { content: ""; position: absolute; inset: 12px; border-radius: 50%; border: 2px solid var(--solaire); }
+.stamp .big { font-family: var(--display); font-size: 34px; font-weight: 800; letter-spacing: .04em; }
+.stamp .small { font-size: 17px; font-weight: 700; letter-spacing: .16em; }
+.stamp img { width: 40px; height: 40px; }
+.foot { position: absolute; left: 186px; right: 72px; bottom: 64px; display: flex; align-items: center; justify-content: space-between; font-size: 16px; color: var(--gris); }
+.foot img { width: 140px; height: auto; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <div class="kente"></div>
+  <div class="margin"></div>
+  <div class="page">
+    <div class="head">
+      <div class="who">
+        <div class="shop-logo" aria-label="Logo de {{ shop.name }}">{{ shop.initial }}</div>
+        <div><span class="name display">{{ shop.name }}</span><span class="meta">{{ shop.address }} · {{ shop.phone }}</span></div>
+      </div>
+      <span class="number">Reçu n° {{ number }}</span>
+    </div>
+    <div class="ln small"><span>Le {{ date }} à {{ time }}</span><span>Client·e : <strong>{{ customer }}</strong></span></div>
+    <div class="ln"></div>
+    {% for line in lines %}
+    <div class="ln"><span><strong>{{ line.product }}</strong> · {{ line.detail }} × {{ line.unit_price | fcfa }}</span><span class="num">{{ line.total | fcfa }}</span></div>
+    {% endfor %}
+    <div class="ln"></div>
+    <div class="ln total"><strong>Total</strong><span class="num">{{ total | fcfa }} FCFA</span></div>
+    <div class="ln paid"><span>Payé · {{ paid_method }}</span><span>{{ paid | fcfa }} FCFA</span></div>
+    {% if due > 0 %}
+    <div class="ln due"><span>Reste dû</span><span class="num">{{ due | fcfa }} FCFA</span></div>
+    {% endif %}
+  </div>
+  <div class="stamp" aria-label="Tampon : {{ 'payé en partie' if due > 0 else 'payé' }}">
+    <span class="big">PAYÉ</span>
+    {% if due > 0 %}<span class="small">EN PARTIE</span>{% endif %}
+    <img src="{{ asset('symbol-solaire.svg') }}" alt="">
+  </div>
+  <div class="foot"><img src="{{ asset('lockup-night.svg') }}" alt="Kayé"><span>Code de vérification · {{ code }}</span></div>
+</div>
+</body>
+</html>

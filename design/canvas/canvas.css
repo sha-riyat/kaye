@@ -1,0 +1,56 @@
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  overscroll-behavior-x: none;
+  background: #ECE7DF; color: #14111B;
+  font-family: Inter, system-ui, sans-serif;
+}
+#viewport {
+  position: fixed; inset: 0; overflow: hidden;
+  cursor: default; overscroll-behavior: none; touch-action: none; outline: none;
+}
+#viewport:focus-visible { box-shadow: inset 0 0 0 3px #FF7A1F; }
+#viewport.panning { cursor: default; }
+#world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+
+.item { position: absolute; left: 0; top: 0; }
+.item-header {
+  position: absolute; left: 0; bottom: 100%; padding-bottom: 10px;
+  display: flex; align-items: center; gap: 8px; white-space: nowrap;
+  transform-origin: 0 100%;
+}
+.item-handle {
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px;
+  background: transparent; color: #6E6478; cursor: default;
+  display: inline-flex; align-items: center; justify-content: center; touch-action: none;
+}
+.item-handle:hover { background: rgba(20, 17, 27, 0.08); }
+.item-label {
+  border: 0; background: none; padding: 2px 4px; margin: 0;
+  font: 500 15px/1.2 Inter, system-ui, sans-serif; color: #14111B; cursor: pointer;
+}
+.item-label:hover { text-decoration: underline; text-underline-offset: 3px; }
+.item-handle:focus-visible, .item-label:focus-visible, .controls button:focus-visible {
+  outline: 2px solid #FF7A1F; outline-offset: 2px;
+}
+.item-status { font-size: 13px; color: #17705F; }
+.item-preview { position: relative; background: #fff; box-shadow: 0 0 0 1px rgba(20, 17, 27, 0.12); overflow: hidden; }
+.item-error { padding: 24px; font: 14px Inter, sans-serif; color: #B84A1E; }
+
+.controls {
+  position: fixed; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 4px;
+  padding: 6px; border-radius: 12px; background: #FFFDF8; box-shadow: 0 1px 0 rgba(20,17,27,.08), 0 6px 20px rgba(20,17,27,.12);
+}
+.controls button {
+  min-width: 36px; height: 36px; padding: 0 10px; border: 0; border-radius: 8px;
+  background: transparent; color: #14111B; font: 500 14px Inter, system-ui, sans-serif; cursor: default;
+}
+.controls button:hover { background: rgba(20, 17, 27, 0.07); }
+#zoom-level { min-width: 52px; text-align: center; font: 500 13px Inter, system-ui, sans-serif; color: #4E4558; }
+
+.fallback {
+  position: fixed; left: 16px; bottom: 16px; display: flex; gap: 8px; align-items: center;
+  padding: 10px 12px; border-radius: 12px; background: #FFFDF8; box-shadow: 0 6px 20px rgba(20,17,27,.15); font-size: 13px;
+}
+.fallback[hidden] { display: none; }
+.fallback input { font: 14px Inter, sans-serif; padding: 6px 8px; border: 1px solid #D6C8AE; border-radius: 6px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

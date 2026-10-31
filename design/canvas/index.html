@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kayé · canvas des documents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/canvas/canvas.css">
+</head>
+<body>
+<main id="viewport" tabindex="0" aria-label="Canvas des documents Kayé. Glisser le fond pour se déplacer, Ctrl + molette pour zoomer, flèches pour se déplacer au clavier.">
+  <div id="world"></div>
+</main>
+<nav class="controls" aria-label="Caméra">
+  <button type="button" id="zoom-out" aria-label="Dézoomer">−</button>
+  <output id="zoom-level" aria-live="off">100 %</output>
+  <button type="button" id="zoom-in" aria-label="Zoomer">+</button>
+  <button type="button" id="fit">Tout voir</button>
+  <button type="button" id="reset">Réinitialiser</button>
+</nav>
+<div id="fallback" class="fallback" hidden>
+  <label for="fallback-text">Copie impossible, sélectionnez le nom :</label>
+  <input id="fallback-text" readonly>
+  <button type="button" id="fallback-close">Fermer</button>
+</div>
+<div id="announce" class="sr-only" aria-live="polite"></div>
+<script src="/canvas/canvas.js"></script>
+</body>
+</html>
