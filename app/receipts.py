@@ -49,8 +49,10 @@ def shop_card(shop: Shop, owner_phone: str | None, logo: bytes | None = None, lo
 
 
 def _detail(line: dict) -> str:
+    from app.agent.actions import plural
+
     unit = line.get("unit")
-    return f"{line['quantity']} {unit}" if unit else f"{line['quantity']}"
+    return f"{line['quantity']} {plural(unit, line['quantity'])}" if unit else f"{line['quantity']}"
 
 
 def receipt_data(shop: dict, entry: Entry, number: int, customer: str, when: datetime) -> dict:

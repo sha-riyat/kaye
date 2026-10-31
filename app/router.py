@@ -46,13 +46,14 @@ async def handle_message(msg: InboundMessage, svc: Services) -> None:
     text, source, media_bytes, mime = msg.text, EntrySource.TEXT, None, ""
     try:
         if msg.type == "audio" and msg.media_id:
-            audio, _ = await wa.download_media(msg.media_id)
-            transcript = await svc.transcriber.transcribe(audio)
+            media_bytes, mime = await wa.download_media(msg.media_id)
+            mime = mime or "audio/ogg"
+            transcript = await svc.transcriber.transcribe(media_bytes)
             if not transcript.text:
                 await wa.send_text(msg.sender, EMPTY_AUDIO_REPLY, reply_to=msg.wamid)
                 return
             text, source = transcript.text, EntrySource.VOICE
-            await wa.send_text(msg.sender, f"🎙️ J'ai compris : « {text} »", reply_to=msg.wamid)
+            log.info("voice note %s: %s", msg.wamid, text)
         elif msg.type == "image" and msg.media_id:
             media_bytes, mime = await wa.download_media(msg.media_id)
             mime = mime or "image/jpeg"
@@ -96,7 +97,18 @@ async def _process(session, svc: Services, msg: InboundMessage, text: str | None
         return await _name_shop(session, shop, text if msg.type in ("text", "audio") else None)
 
     ctx = Ctx(session=session, shop=shop, user=user, wamid=msg.wamid, source=source)
+    replies = await _handle(ctx, svc, msg, text, media_bytes, mime)
+    said = (
+        text if msg.type in ("text", "audio") else ("[photo]" if msg.type == "image" else f"[{msg.text or 'bouton'}]")
+    )
+    await queries.remember(session, shop.id, user.id, "merchant", said or "")
+    for reply in replies:
+        await queries.remember(session, shop.id, user.id, "kaye", reply.text)
+    return replies
 
+
+async def _handle(ctx: Ctx, svc: Services, msg: InboundMessage, text: str | None,
+                  media_bytes: bytes | None, mime: str) -> list[Reply]:  # fmt: skip
     if msg.type == "button" and msg.button_id:
         return await _on_button(ctx, svc, msg.button_id)
 
@@ -113,6 +125,8 @@ async def _process(session, svc: Services, msg: InboundMessage, text: str | None
     if text:
         if (blocked := await _guard(ctx, svc)) is not None:
             return [blocked]
+        if msg.type == "audio" and media_bytes:
+            ctx.media_id = await _store_media(ctx, svc, "audio", media_bytes, mime, msg.media_id)
         return await svc.agent.on_text(ctx, text)
 
     return [Reply(UNSUPPORTED_REPLY)]
@@ -140,10 +154,12 @@ async def _store_media(
     ctx: Ctx, svc: Services, kind: str, data: bytes, mime: str, wa_media_id: str | None
 ) -> int | None:
     if svc.storage is None:
+        log.warning("R2 is not configured: %s not stored", kind)
         return None
     try:
         key = media_key(ctx.shop.id, kind, mime)
         await svc.storage.put(key, data, mime)
+        log.info("stored %s in R2 as %s", kind, key)
         media = Media(shop_id=ctx.shop.id, kind=kind, storage_key=key, mime_type=mime, wa_media_id=wa_media_id)
         ctx.session.add(media)
         await ctx.session.flush()
@@ -184,10 +200,14 @@ async def _on_button(ctx: Ctx, svc: Services, button_id: str) -> list[Reply]:
         await queries.settle_pending(ctx.session, pending, PendingStatus.EXPIRED)
         return [Reply(EXPIRED_REPLY)]
 
+    subs = await _batch_items(ctx, pending)
     if action == "no":
-        await queries.settle_pending(ctx.session, pending, PendingStatus.CANCELLED)
+        for item in [pending, *subs]:
+            await queries.settle_pending(ctx.session, item, PendingStatus.CANCELLED)
         return [Reply("D'accord, j'annule. Rien n'est noté.")]
     if action == "fix":
+        for item in subs:
+            await queries.settle_pending(ctx.session, item, PendingStatus.CANCELLED)
         await actions.mark_corrected(ctx, pending)
         return [Reply("Dites-moi ce qu'il faut changer (par vocal ou par écrit), je refais la proposition.")]
     if action == "pick":
@@ -197,13 +217,28 @@ async def _on_button(ctx: Ctx, svc: Services, button_id: str) -> list[Reply]:
     return [Reply("Je n'ai pas compris ce bouton.")]
 
 
+async def _batch_items(ctx: Ctx, pending) -> list:
+    if pending.kind != "batch":
+        return []
+    items = [await queries.get_pending(ctx.session, ctx.shop.id, i) for i in pending.payload["ids"]]
+    return [i for i in items if i is not None and i.status == PendingStatus.PENDING]
+
+
 async def _confirm(ctx: Ctx, svc: Services, pending) -> list[Reply]:
-    applied = await actions.apply_pending(ctx, pending)
-    await queries.settle_pending(ctx.session, pending, PendingStatus.CONFIRMED)
-    replies = [applied.reply]
-    if applied.sale_entry_id:
-        replies.append(await _receipt_reply(ctx, svc, applied.sale_entry_id))
-    return replies
+    """Apply one proposal, or every operation of a grouped recap, then send one confirmation."""
+    items = await _batch_items(ctx, pending) if pending.kind == "batch" else [pending]
+    texts, receipts = [], []
+    for item in items:
+        applied = await actions.apply_pending(ctx, item)
+        await queries.settle_pending(ctx.session, item, PendingStatus.CONFIRMED)
+        texts.append(applied.reply.text)
+        if applied.sale_entry_id:
+            receipts.append(await _receipt_reply(ctx, svc, applied.sale_entry_id))
+    if pending.kind == "batch":
+        await queries.settle_pending(ctx.session, pending, PendingStatus.CONFIRMED)
+    if not texts:
+        return [Reply("Cette proposition a déjà été traitée.")]
+    return [Reply("\n".join(texts)), *receipts]
 
 
 async def _receipt_reply(ctx: Ctx, svc: Services, entry_id: int) -> Reply:

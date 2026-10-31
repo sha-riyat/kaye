@@ -43,7 +43,7 @@ class ProposeSupplierDebt(BaseModel):
     """Record goods bought from a supplier (grossiste), possibly on credit with a due date."""
 
     supplier: str = Field(description="Supplier name as said, e.g. 'Koffi'")
-    amount: int = Field(gt=0, description="Total in FCFA")
+    amount: int | None = Field(default=None, gt=0, description="Total in FCFA, only if said")
     paid: int | None = Field(default=None, ge=0, description="Amount paid now in FCFA, if said")
     due_date: str | None = Field(default=None, description="Due date as ISO YYYY-MM-DD, if said")
     items: str | None = Field(default=None, description="What was bought, short, e.g. '20 sacs de riz'")

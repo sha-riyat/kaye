@@ -13,6 +13,7 @@ from app.db.models import (
     AppUser,
     Contact,
     ContactKind,
+    MessageLog,
     ModelCall,
     PendingAction,
     PendingStatus,
@@ -142,13 +143,15 @@ async def contact_by_phone(session: AsyncSession, shop_id: int, phone: str) -> C
 # --- products, prices, stock ---
 
 
+def _product_key(name: str) -> str:
+    """'Sacs de riz' and 'sac de riz' are the same product; 'riz' and 'riz parfumé' are not."""
+    return " ".join(w[:-1] if len(w) > 3 and w.endswith("s") else w for w in norm(name).split())
+
+
 async def get_product(session: AsyncSession, shop_id: int, name: str) -> Product | None:
-    wanted = norm(name)
+    wanted = _product_key(name)
     products = (await session.exec(select(Product).where(Product.shop_id == shop_id))).all()
-    for p in products:
-        if norm(p.name) == wanted:
-            return p
-    return next((p for p in products if wanted and (wanted in norm(p.name) or norm(p.name) in wanted)), None)
+    return next((p for p in products if _product_key(p.name) == wanted), None)
 
 
 async def usual_price(session: AsyncSession, shop_id: int, product: str, unit: str | None) -> int | None:
@@ -231,6 +234,33 @@ async def create_pending(
     return pending
 
 
+async def recent_same_proposal(session: AsyncSession, user_id: int, kind: str, payload: dict) -> bool:
+    """True if the same operation was proposed (and not cancelled) in the last 15 minutes."""
+    since = utcnow() - timedelta(minutes=15)
+    query = select(PendingAction).where(
+        PendingAction.user_id == user_id,
+        PendingAction.kind == kind,
+        PendingAction.created_at >= since,
+        col(PendingAction.status).in_([PendingStatus.PENDING, PendingStatus.CONFIRMED]),
+    )
+    rows = (await session.exec(query)).all()
+    return any(_same(r.payload, payload) for r in rows)
+
+
+def _same(a: dict, b: dict) -> bool:
+    """Same operation, ignoring bookkeeping fields that differ between two proposals of it."""
+    skip = {"candidates", "balance_before", "warning", "corrected", "before", "after"}
+
+    def clean(d):
+        if isinstance(d, dict):
+            return {k: clean(v) for k, v in d.items() if k not in skip}
+        if isinstance(d, list):
+            return [clean(v) for v in d]
+        return d
+
+    return clean(a) == clean(b)
+
+
 async def get_pending(session: AsyncSession, shop_id: int, pending_id: int) -> PendingAction | None:
     """Fetched with a row lock: two quick taps on "Oui" must not write twice."""
     pending = await session.get(PendingAction, pending_id, with_for_update=True)
@@ -242,8 +272,8 @@ async def settle_pending(session: AsyncSession, pending: PendingAction, status: 
     session.add(pending)
 
 
-async def last_clarify(session: AsyncSession, user_id: int) -> PendingAction | None:
-    """A question we asked the merchant that is still waiting for its answer."""
+async def open_questions(session: AsyncSession, user_id: int) -> list[PendingAction]:
+    """Questions we asked the merchant that are still waiting for an answer, oldest first."""
     query = (
         select(PendingAction)
         .where(
@@ -252,10 +282,9 @@ async def last_clarify(session: AsyncSession, user_id: int) -> PendingAction | N
             PendingAction.status == PendingStatus.PENDING,
             PendingAction.expires_at > utcnow(),
         )
-        .order_by(col(PendingAction.id).desc())
-        .limit(1)
+        .order_by(col(PendingAction.id))
     )
-    return (await session.exec(query)).first()
+    return list((await session.exec(query)).all())
 
 
 async def last_corrected(session: AsyncSession, user_id: int) -> PendingAction | None:
@@ -324,3 +353,25 @@ async def spent_today(session: AsyncSession) -> float:
         ModelCall.created_at >= start, ModelCall.created_at < end
     )
     return float((await session.exec(query)).one())
+
+
+# --- conversation memory ---
+
+MEMORY_TURNS = 8
+MEMORY_WINDOW = timedelta(hours=6)
+
+
+async def remember(session: AsyncSession, shop_id: int, user_id: int, role: str, text: str) -> None:
+    if text:
+        session.add(MessageLog(shop_id=shop_id, user_id=user_id, role=role, text=text[:600]))
+
+
+async def recent_turns(session: AsyncSession, user_id: int) -> list[MessageLog]:
+    """The last few messages of this conversation (not older than a few hours), oldest first."""
+    query = (
+        select(MessageLog)
+        .where(MessageLog.user_id == user_id, MessageLog.created_at >= utcnow() - MEMORY_WINDOW)
+        .order_by(col(MessageLog.id).desc())
+        .limit(MEMORY_TURNS)
+    )
+    return list(reversed((await session.exec(query)).all()))

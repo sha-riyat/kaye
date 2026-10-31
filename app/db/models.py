@@ -224,3 +224,20 @@ class ModelCall(SQLModel, table=True):
     audio_ms: int = 0
     cost_usd: Decimal = Field(default=Decimal(0), sa_column=Column(Numeric(12, 6), nullable=False))
     created_at: datetime | None = _created_at()
+
+
+class MessageLog(SQLModel, table=True):
+    """The recent conversation, so Kayé understands « et Kofi aussi » or « non, 12 000 ».
+
+    Short-lived context, not an archive: only the last few turns are ever read.
+    """
+
+    __tablename__ = "message_log"
+    __table_args__ = (Index("ix_message_log_user_created", "user_id", "created_at"),)
+
+    id: int | None = Field(default=None, primary_key=True, sa_type=BigInteger)
+    shop_id: int = _fk("shop.id")
+    user_id: int = _fk("app_user.id")
+    role: str = Field(sa_type=String(16))  # merchant or kaye
+    text: str
+    created_at: datetime | None = _created_at()

@@ -263,7 +263,7 @@ async def test_correct_button_replays_the_proposal_with_the_fix(chat, models):
 async def test_a_missing_price_is_asked_then_remembered(chat, models):
     no_price = ("propose_sale", {"lines": [{"product": "huile", "quantity": 2}], "customer": "Kofi"})
     asked = await chat.say("2 huile à Kofi", no_price)
-    assert "À quel prix" in asked[0].text and asked[0].buttons == []
+    assert asked[0].text == "Quel est le prix de huile, à l'unité ?" and asked[0].buttons == []
     priced = ("propose_sale", {"lines": [{"product": "huile", "quantity": 2, "unit_price": 6_500}], "customer": "Kofi"})
     replies = await chat.say("6 500 pièce", priced)
     assert "2 huile × 6 500 = 13 000" in replies[0].text
@@ -278,7 +278,7 @@ async def test_usual_price_is_learned_from_a_confirmed_sale(chat):
         {"lines": [{"product": "riz", "quantity": 2, "unit": "sac"}], "customer": "Kofi", "paid": 22_000},
     )
     replies = await chat.say("2 sacs de riz à Kofi", no_price)
-    assert "2 sac riz × 11 000 = 22 000" in replies[0].text
+    assert "2 sacs riz × 11 000 = 22 000" in replies[0].text
 
 
 async def test_ambiguous_customer_is_asked_with_a_list(chat, db):
@@ -375,7 +375,7 @@ async def test_notebook_photo_imports_debts_after_one_yes(chat, db):
 # --- suppliers, expenses, stock ---
 
 
-async def test_supplier_purchase_with_due_date_and_stock(chat, db):
+async def test_a_delivery_is_one_recap_with_one_set_of_buttons(chat, db):
     debt = (
         "propose_supplier_debt",
         {"supplier": "Koffi", "amount": 180_000, "due_date": "2026-11-06", "items": "20 sacs de riz"},
@@ -383,13 +383,26 @@ async def test_supplier_purchase_with_due_date_and_stock(chat, db):
     stock = ("propose_stock_change", {"product": "riz", "quantity": 20, "mode": "add", "unit": "sac"})
     chat.models.say([debt, stock])
     replies = await chat.send(text="Koffi a livré 20 sacs de riz, 180 000, je paie vendredi")
-    assert "Achat chez Koffi" in replies[0].text and "06/11/2026" in replies[0].text
-    assert "Entrée de stock" in replies[1].text and "0 → *20*" in replies[1].text
-    await chat.tap(replies[0].buttons[0][0])
-    await chat.tap(replies[1].buttons[0][0])
+    assert len(replies) == 1
+    recap = replies[0].text
+    assert "Achat chez Koffi" in recap and "06/11/2026" in recap and "0 → *20*" in recap
+    assert recap.endswith("Je note tout ?") and len(replies[0].buttons) == 3
+    done = await chat.tap(replies[0].buttons[0][0])
+    assert len(done) == 1 and "180 000 FCFA à Koffi" in done[0].text and "Stock de riz : *20*" in done[0].text
     assert await balance(db, "Koffi") == 180_000
     due = await chat.send(text="qui je dois payer ?")
     assert "Koffi : *180 000" in due[0].text and "06/11" in due[0].text
+
+
+async def test_cancelling_a_grouped_recap_writes_nothing(chat, db):
+    stock = ("propose_stock_change", {"product": "riz", "quantity": 20, "mode": "add"})
+    expense = ("propose_expense", {"amount": 3_500, "label": "transport"})
+    chat.models.say([stock, expense])
+    replies = await chat.send(text="reçu 20 riz, transport 3 500")
+    await chat.tap(replies[0].buttons[2][0])
+    async with db.session() as s:
+        assert (await s.exec(select(Entry))).all() == []
+        assert all(p.status == "cancelled" for p in (await s.exec(select(PendingAction))).all())
 
 
 async def test_sales_lower_tracked_stock_and_warn_when_low(chat, db):
@@ -483,11 +496,11 @@ async def test_a_seller_can_sell_but_not_see_the_books(chat, db, models):
         assert (await s.exec(select(Entry))).one().created_by is not None
 
 
-async def test_voice_note_is_transcribed_then_handled(chat):
+async def test_voice_note_goes_straight_to_the_recap(chat):
     chat.models.say(SALE)
     replies = await chat.send("audio", media_id="A1")
-    assert replies[0].text.startswith("🎙️ J'ai compris")
-    assert "Vente à Ama Koudjo" in replies[1].text
+    assert len(replies) == 1 and "Vente à Ama Koudjo" in replies[0].text  # no « J'ai compris » echo
+    assert chat.models.calls[-1]["messages"][-1]["content"] == FakeTranscriber.text
 
 
 async def test_logo_caption_is_not_read_as_a_notebook(chat, models):
@@ -551,3 +564,63 @@ async def test_evening_summary_and_supplier_reminder_are_sent(chat, db, monkeypa
     texts = [m.text for m in chat.wa.sent]
     assert any("Bilan du jour" in t and "8 000" in t.replace(" ", " ") for t in texts)
     assert any("Rappel fournisseurs" in t and "Koffi" in t for t in texts)
+
+
+# --- lessons from the first live test ---
+
+
+async def test_a_missing_price_is_asked_inside_the_recap_and_never_twice(chat, db):
+    no_price = ("propose_sale", {"lines": [{"product": "riz", "quantity": 4, "unit": "sac"}], "customer": "Ama"})
+    expense = ("propose_expense", {"amount": 3_500, "label": "transport"})
+    first = await chat.say("4 sacs à Ama, transport 3 500", [no_price, expense])
+    assert len(first) == 1
+    assert "Dépense : transport" in first[0].text and "❓ Quel est le prix pour 1 sac de riz ?" in first[0].text
+    await chat.tap(first[0].buttons[0][0])  # the expense can be noted right away
+    priced = (
+        "propose_sale",
+        {"lines": [{"product": "riz", "quantity": 4, "unit": "sac", "unit_price": 11_000}], "customer": "Ama"},
+    )
+    second = await chat.say("11 000 le sac", [priced, expense])  # the model repeats the expense
+    assert len(second) == 1 and "Vente à Ama" in second[0].text and "Dépense" not in second[0].text
+    assert "traite seulement celles de mes questions" in chat.models.calls[-1]["messages"][-1]["content"]
+
+
+async def test_supplier_delivery_without_amount_asks_how_much(chat):
+    debt = ("propose_supplier_debt", {"supplier": "Koffi", "items": "20 sacs de riz"})
+    replies = await chat.say("reçu 20 sacs chez Koffi, je paie vendredi", debt)
+    assert replies[0].text == "Combien devez-vous à Koffi pour 20 sacs de riz ?"
+
+
+async def test_products_are_matched_exactly_not_by_substring(chat, db):
+    a = await chat.say(
+        "j'ai 5 sacs de riz parfumé", ("propose_stock_change", {"product": "riz parfumé", "quantity": 5, "mode": "set"})
+    )
+    await chat.tap(a[0].buttons[0][0])
+    b = await chat.say(
+        "reçu 20 sacs de riz", ("propose_stock_change", {"product": "riz", "quantity": 20, "mode": "add"})
+    )
+    assert "0 → *20*" in b[0].text  # plain rice is not the perfumed one
+    await chat.tap(b[0].buttons[0][0])
+    async with db.session() as s:
+        assert sorted((p.name, p.stock) for p in (await s.exec(select(Product))).all()) == [
+            ("riz", 20),
+            ("riz parfumé", 5),
+        ]
+
+
+async def test_two_open_questions_come_in_one_message_and_are_answered_together(chat, models):
+    no_price = ("propose_sale", {"lines": [{"product": "riz", "quantity": 4, "unit": "sac"}], "customer": "Ama"})
+    no_amount = ("propose_supplier_debt", {"supplier": "Koffi"})
+    asked = await chat.say("vendu 4 sacs à Ama, reçu du riz de Koffi", [no_price, no_amount])
+    assert len(asked) == 1 and "Quel est le prix" in asked[0].text and "Combien devez-vous à Koffi" in asked[0].text
+    await chat.say("11 000 le sac, et je dois 180 000 à Koffi", "ok")
+    sent = models.calls[-1]["messages"][-1]["content"]
+    assert "Quel est le prix pour 1 sac de riz" in sent and "Combien devez-vous à Koffi" in sent
+
+
+async def test_recent_turns_are_given_to_the_model(chat, models):
+    await chat.say("salut", "Bonjour ! Que puis-je noter ?")
+    await chat.say("et Kofi aussi", "D'accord")
+    history = models.calls[-1]["messages"][1:-1]
+    assert {"role": "user", "content": "salut"} in history
+    assert {"role": "assistant", "content": "Bonjour ! Que puis-je noter ?"} in history

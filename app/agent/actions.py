@@ -44,6 +44,7 @@ class Ctx:
     source: str = EntrySource.TEXT
     media_id: int | None = None
     text: str = ""  # what the merchant said (or the voice transcript)
+    replaying: bool = False  # this message answers our question: its other operations were proposed already
     now: datetime = field(default_factory=queries.utcnow)
 
 
@@ -131,8 +132,8 @@ def _ask_which(pending_id: int, party: dict, noun: str) -> Reply:
     rows.append((f"pick:{pending_id}:new", f"Nouveau : {party['name']}"[:24], ""))
     text = f"J'ai plusieurs {noun} qui ressemblent à « {party['spoken']} ». Lequel ?"
     if len(rows) <= 3:
-        return Reply(text, buttons=[(rid, title[:20]) for rid, title, _ in rows])
-    return Reply(text, rows=rows, list_button="Choisir")
+        return Reply(text, buttons=[(rid, title[:20]) for rid, title, _ in rows], kind="choice")
+    return Reply(text, rows=rows, list_button="Choisir", kind="choice")
 
 
 async def _party_contact(ctx: Ctx, party: dict, kind: ContactKind) -> Contact:
@@ -149,12 +150,14 @@ async def _party_contact(ctx: Ctx, party: dict, kind: ContactKind) -> Contact:
 
 
 async def _propose(ctx: Ctx, kind: str, payload: dict, party: dict | None = None, noun: str = "clients") -> list[Reply]:
+    if ctx.replaying and await queries.recent_same_proposal(ctx.session, ctx.user.id, kind, payload):
+        return []  # proposed with the first message; only the answered operation is new
     pending = await queries.create_pending(
         ctx.session, shop_id=ctx.shop.id, user_id=ctx.user.id, kind=kind, payload=payload, wamid=ctx.wamid
     )
     if party and party["candidates"] and not party["id"]:
         return [_ask_which(pending.id, party, noun)]
-    return [Reply(describe(pending), buttons=confirm_buttons(pending.id))]
+    return [Reply(describe(pending), buttons=confirm_buttons(pending.id), kind="proposal")]
 
 
 async def _clarify(ctx: Ctx, question: str, original: str | None) -> list[Reply]:
@@ -162,17 +165,67 @@ async def _clarify(ctx: Ctx, question: str, original: str | None) -> list[Reply]
     if original:
         await queries.create_pending(
             ctx.session, shop_id=ctx.shop.id, user_id=ctx.user.id, kind="clarify",
-            payload={"original": original}, wamid=ctx.wamid,
+            payload={"original": original, "question": question}, wamid=ctx.wamid,
         )  # fmt: skip
-    return [Reply(question)]
+    return [Reply(question, kind="question")]
+
+
+# --- one recap per message ---
+
+ASK = "\n\nJe note ?"
+
+
+def _body(text: str) -> str:
+    return text.removesuffix(ASK)
+
+
+async def merge(ctx: Ctx, replies: list[Reply]) -> list[Reply]:
+    """Fold everything a message produced into one recap with one set of buttons.
+
+    A voice note often holds several operations (a sale, a delivery, an expense): the merchant
+    gets a single summary to confirm, and any missing price or amount is asked at its bottom.
+    """
+    proposals = [r for r in replies if r.kind == "proposal"]
+    questions = [r for r in replies if r.kind == "question"]
+    others = [r for r in replies if r.kind not in ("proposal", "question")]
+    missing = "\n".join(f"❓ {q.text}" for q in questions)
+
+    if not proposals:
+        return others + (
+            [Reply(missing.replace("❓ ", "") if len(questions) == 1 else missing, kind="question")]
+            if questions
+            else []
+        )
+
+    if len(proposals) == 1:
+        recap, pending_id = _body(proposals[0].text), int(proposals[0].buttons[0][0].split(":")[1])
+    else:
+        ids = [int(p.buttons[0][0].split(":")[1]) for p in proposals]
+        recap = "\n\n".join(_body(p.text) for p in proposals)
+        batch = await queries.create_pending(
+            ctx.session, shop_id=ctx.shop.id, user_id=ctx.user.id, kind="batch",
+            payload={"ids": ids, "text": recap}, wamid=ctx.wamid,
+        )  # fmt: skip
+        pending_id = batch.id
+    if missing:
+        recap += f"\n\n{missing}\n_Répondez quand vous voulez. Le reste peut être noté tout de suite._"
+    ask = "\n\nJe note ?" if len(proposals) == 1 else "\n\nJe note tout ?"
+    return others + [Reply(recap + ask, buttons=confirm_buttons(pending_id), kind="proposal")]
 
 
 # --- confirmation text, always built by code ---
 
 
+def plural(unit: str, quantity: int) -> str:
+    """'sac' -> 'sacs' when more than one; units already ending in s or x stay as they are."""
+    if quantity > 1 and " " not in unit and not unit.endswith(("s", "x")):
+        return unit + "s"
+    return unit
+
+
 def _qty(line: dict) -> str:
     unit = line.get("unit")
-    return f"{line['quantity']} {unit}" if unit else f"{line['quantity']}"
+    return f"{line['quantity']} {plural(unit, line['quantity'])}" if unit else f"{line['quantity']}"
 
 
 def _who(party: dict) -> str:
@@ -181,6 +234,8 @@ def _who(party: dict) -> str:
 
 def describe(pending: PendingAction) -> str:
     p, kind = pending.payload, pending.kind
+    if kind == "batch":
+        return p["text"]
     if kind == "sale":
         lines = "\n".join(
             f"{_qty(ln)} {ln['product']} × {money(ln['unit_price'])} = {money(ln['total'])}" for ln in p["lines"]
@@ -264,8 +319,8 @@ async def propose_sale(ctx: Ctx, a: s.ProposeSale) -> list[Reply]:
         if price is None:
             price = await queries.usual_price(ctx.session, ctx.shop.id, ln.product, ln.unit)
         if price is None:
-            unit = f" le {ln.unit}" if ln.unit else ""
-            return await _clarify(ctx, f"À quel prix avez-vous vendu {ln.product}{unit} ?", _original(ctx, a))
+            each = f"pour 1 {ln.unit} de {ln.product}" if ln.unit else f"de {ln.product}, à l'unité"
+            return await _clarify(ctx, f"Quel est le prix {each} ?", _original(ctx, a))
         lines.append(
             {
                 "product": ln.product,
@@ -311,6 +366,9 @@ async def propose_payment(ctx: Ctx, a: s.ProposePayment, *, provider: str | None
 
 
 async def propose_supplier_debt(ctx: Ctx, a: s.ProposeSupplierDebt) -> list[Reply]:
+    if a.amount is None:
+        what = f" pour {a.items}" if a.items else ""
+        return await _clarify(ctx, f"Combien devez-vous à {a.supplier}{what} ?", _original(ctx, a))
     party = await _resolve_party(ctx, a.supplier, ContactKind.SUPPLIER)
     due = None
     if a.due_date:
@@ -722,7 +780,7 @@ async def pick_party(ctx: Ctx, pending: PendingAction, choice: str) -> Reply:
     payload["party"] = party
     pending.payload = payload
     ctx.session.add(pending)
-    return Reply(describe(pending), buttons=confirm_buttons(pending.id))
+    return Reply(describe(pending), buttons=confirm_buttons(pending.id), kind="proposal")
 
 
 async def mark_corrected(ctx: Ctx, pending: PendingAction) -> None:

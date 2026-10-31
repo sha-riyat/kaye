@@ -12,7 +12,7 @@ from app.models_client import ModelClient, image_part
 
 log = logging.getLogger(__name__)
 
-MAX_TOOL_CALLS = 3
+MAX_TOOL_CALLS = 6
 MODEL_PARAMS = {"reasoning_effort": "minimal", "max_tokens": 1500}
 
 TEXT_TOOLS = [
@@ -43,7 +43,7 @@ class Agent:
         ctx.text = text
         name = shortcut(text)
         if name:
-            return await actions.run_tool(ctx, name, "{}")
+            return await actions.merge(ctx, await actions.run_tool(ctx, name, "{}"))
         text = await self._with_context(ctx, text)
         contacts = [c.name for c in await _recent_contacts(ctx)]
         messages = [
@@ -51,6 +51,7 @@ class Agent:
                 "role": "system",
                 "content": system_prompt(shop_name=ctx.shop.name, now=ctx.now, contacts=contacts),
             },
+            *await _memory(ctx),
             {"role": "user", "content": text},
         ]
         return await self._call(ctx, messages, TEXT_TOOLS)
@@ -74,15 +75,23 @@ class Agent:
             return [Reply((message.content or "").strip() or actions.REPHRASE)]
         replies: list[Reply] = []
         for call in calls:
+            log.info("tool %s %s", call.function.name, call.function.arguments)
             replies += await actions.run_tool(ctx, call.function.name, call.function.arguments)
-        return replies
+        return await actions.merge(ctx, replies)
 
     async def _with_context(self, ctx: Ctx, text: str) -> str:
         """Fold in the previous exchange when this message is an answer or a correction."""
-        pending = await queries.last_clarify(ctx.session, ctx.user.id)
-        if pending is not None:
-            await queries.settle_pending(ctx.session, pending, actions.PendingStatus.EXPIRED)
-            return f"{pending.payload['original']}\nRéponse du commerçant à ma question : {text}"
+        questions = await queries.open_questions(ctx.session, ctx.user.id)
+        if questions:
+            ctx.replaying = True
+            for q in questions:
+                await queries.settle_pending(ctx.session, q, actions.PendingStatus.EXPIRED)
+            asked = " ; ".join(f"« {q.payload.get('question', '')} »" for q in questions)
+            return (
+                f"{questions[0].payload['original']}\n"
+                f"Je lui ai demandé : {asked}\nSa réponse : {text}\n"
+                "Les autres opérations de son message sont déjà proposées : traite seulement celles de mes questions."
+            )
         corrected = await queries.last_corrected(ctx.session, ctx.user.id)
         if corrected is not None:
             corrected.payload = {**corrected.payload, "corrected": False}
@@ -92,6 +101,12 @@ class Agent:
                 f"Le commerçant corrige : {text}\nRefais la proposition corrigée."
             )
         return text
+
+
+async def _memory(ctx: Ctx) -> list[dict]:
+    """The last turns of the conversation, so a short follow-up is read in context."""
+    turns = await queries.recent_turns(ctx.session, ctx.user.id)
+    return [{"role": "user" if t.role == "merchant" else "assistant", "content": t.text} for t in turns]
 
 
 async def _recent_contacts(ctx: Ctx):
