@@ -1,0 +1,37 @@
+{% extends "_ticket.html.j2" %}
+{% block kind %}Bilan du {{ date }}{% endblock %}
+{% block doc_h %}1750{% endblock %}
+{% block head_meta %}
+<div class="row"><span class="doc-kind">Bilan du jour</span><span class="label">{{ date_long }}</span></div>
+<div class="row"><span class="label">Opérations notées</span><strong>{{ operations }}</strong></div>
+{% endblock %}
+{% block extra_css %}
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.kpi { border-radius: 14px; background: var(--cauri); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
+.kpi span { font-size: 15px; color: var(--gris); }
+.kpi strong { font-family: var(--display); font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+.kpi.green strong { color: var(--lagune); }
+.kpi.red strong { color: var(--laterite); }
+.debtors { display: flex; flex-direction: column; gap: 10px; font-size: 17px; }
+.debtors .row { font-size: 17px; }
+.section { font-size: 15px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+{% endblock %}
+{% block body %}
+<div class="total"><span class="label">Ventes du jour</span><span class="amount display">{{ sales | fcfa }} <small>FCFA</small></span></div>
+<div class="kpis">
+  <div class="kpi green"><span>Encaissé</span><strong>{{ cashed | fcfa }}</strong></div>
+  <div class="kpi red"><span>Vendu à crédit</span><strong>{{ credit | fcfa }}</strong></div>
+  <div class="kpi"><span>dont mobile money</span><strong>{{ mobile_money | fcfa }}</strong></div>
+  <div class="kpi green"><span>Dettes remboursées</span><strong>{{ repaid | fcfa }}</strong></div>
+</div>
+<div class="rule"></div>
+<span class="section">À relancer</span>
+<div class="debtors">
+  {% for d in debtors %}
+  <div class="row"><span>{{ d.name }} <span class="label">· depuis {{ d.since }}</span></span><strong style="color:var(--laterite)">{{ d.due | fcfa }}</strong></div>
+  {% endfor %}
+</div>
+<div class="band due"><span class="label">Reste à encaisser</span><span class="amount display">{{ outstanding | fcfa }} FCFA</span></div>
+<p class="note">Répondez « relance » pour préparer les messages de rappel.</p>
+{% endblock %}
+{% block seal %}Bilan préparé par Kayé à {{ time }}{% endblock %}

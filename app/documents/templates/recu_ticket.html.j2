@@ -1,69 +1,20 @@
-<!doctype html>
-<html lang="fr">
-<head>
-<meta charset="utf-8">
-<title>Reçu n° {{ number }} · {{ shop.name }}</title>
-<style>
-{% include "_brand.css" %}
-.doc { width: 1080px; height: 1500px; background: var(--nuit); display: flex; align-items: center; justify-content: center; }
-.ticket { width: 680px; filter: drop-shadow(0 30px 60px rgba(0,0,0,.45)); }
-.paper { background: var(--papier); border-radius: 14px 14px 0 0; overflow: hidden; }
-.kente { height: 26px; background: url("{{ asset('pattern-kente.svg') }}") 0 -120px / 700px auto; }
-.body { padding: 44px 56px 36px; display: flex; flex-direction: column; gap: 22px; }
-.head { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
-.head .shop-logo { width: 84px; height: 84px; border-radius: 50%; font-size: 42px; }
-.head .name { font-size: 34px; font-weight: 700; }
-.head .meta { font-size: 17px; color: var(--gris); line-height: 1.5; }
-.rule { border-top: 2px dashed var(--trait); }
-.row { display: flex; justify-content: space-between; font-size: 17px; }
-.row .label { color: var(--gris); }
-.number { font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-.lines { display: flex; flex-direction: column; gap: 16px; font-size: 18px; }
-.line strong { display: flex; justify-content: space-between; font-weight: 600; }
-.line span { font-size: 15px; color: var(--gris); }
-.total { display: flex; justify-content: space-between; align-items: baseline; }
-.total .amount { font-size: 40px; font-weight: 700; }
-.total .amount small { font-size: 20px; font-weight: 500; }
-.paid { display: flex; justify-content: space-between; font-size: 18px; font-weight: 600; color: var(--lagune); }
-.due { border-radius: 14px; background: var(--laterite); color: var(--papier); padding: 18px 22px; display: flex; justify-content: space-between; align-items: center; }
-.due .label { font-size: 17px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-.due .amount { font-size: 34px; font-weight: 700; }
-.seal { display: flex; align-items: center; justify-content: center; gap: 12px; padding-top: 10px; font-size: 14px; color: var(--gris); }
-.seal img { width: 26px; height: 26px; }
-.tear { display: block; }
-</style>
-</head>
-<body>
-<div class="doc">
-  <div class="ticket">
-    <div class="paper">
-      <div class="kente"></div>
-      <div class="body">
-        <div class="head">
-          <div class="shop-logo" aria-label="Logo de {{ shop.name }}">{{ shop.initial }}</div>
-          <span class="name display">{{ shop.name }}</span>
-          <span class="meta">{{ shop.activity }} · {{ shop.address }}<br>{{ shop.phone }}</span>
-        </div>
-        <div class="rule"></div>
-        <div class="row"><span class="number">Reçu n° {{ number }}</span><span class="label">{{ date }} · {{ time }}</span></div>
-        <div class="row"><span class="label">Client·e</span><strong>{{ customer }}</strong></div>
-        <div class="rule"></div>
-        <div class="lines">
-          {% for line in lines %}
-          <div class="line"><strong><span>{{ line.product }}</span><span>{{ line.total | fcfa }}</span></strong><span>{{ line.detail }} × {{ line.unit_price | fcfa }}</span></div>
-          {% endfor %}
-        </div>
-        <div class="rule"></div>
-        <div class="total"><span style="font-size:18px;font-weight:600">Total</span><span class="amount display">{{ total | fcfa }} <small>FCFA</small></span></div>
-        <div class="paid"><span>Payé · {{ paid_method }}</span><span>{{ paid | fcfa }} FCFA</span></div>
-        {% if due > 0 %}
-        <div class="due"><span class="label">Reste dû</span><span class="amount display">{{ due | fcfa }} FCFA</span></div>
-        {% endif %}
-        <div class="seal"><img src="{{ asset('symbol-solaire.svg') }}" alt=""><span>Noté par Kayé · code {{ code }}</span></div>
-      </div>
-    </div>
-    <svg class="tear" aria-hidden="true" width="680" height="22" viewBox="0 0 680 22" preserveAspectRatio="none"><path fill="#FFFDF8" d="M0 0 H680 V8 {% for i in range(40) %}L{{ 680 - i * 17 - 8.5 }} {{ 22 if i % 2 == 0 else 8 }} {% endfor %}L0 8 Z"/></svg>
-  </div>
+{% extends "_ticket.html.j2" %}
+{% block kind %}Reçu n° {{ number }}{% endblock %}
+{% block doc_h %}1500{% endblock %}
+{% block head_meta %}
+<div class="row"><span class="doc-kind">Reçu n° {{ number }}</span><span class="label">{{ date }} · {{ time }}</span></div>
+<div class="row"><span class="label">Client·e</span><strong>{{ customer }}</strong></div>
+{% endblock %}
+{% block body %}
+<div class="lines">
+  {% for line in lines %}
+  <div class="line"><strong><span>{{ line.product }}</span><span>{{ line.total | fcfa }}</span></strong><span>{{ line.detail }} × {{ line.unit_price | fcfa }}</span></div>
+  {% endfor %}
 </div>
-</body>
-</html>
+<div class="rule"></div>
+<div class="total"><span class="label">Total</span><span class="amount display">{{ total | fcfa }} <small>FCFA</small></span></div>
+<div class="ok"><span>Payé · {{ paid_method }}</span><span>{{ paid | fcfa }} FCFA</span></div>
+{% if due > 0 %}
+<div class="band due"><span class="label">Reste dû</span><span class="amount display">{{ due | fcfa }} FCFA</span></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "_ticket.html.j2" %}
+{% block kind %}Rappel pour {{ customer }}{% endblock %}
+{% block doc_h %}1550{% endblock %}
+{% block head_meta %}
+<div class="row"><span class="doc-kind">Petit rappel</span><span class="label">{{ date }}</span></div>
+{% endblock %}
+{% block body %}
+<p style="margin:0;font-size:22px;line-height:1.5">Bonjour {{ customer }},<br>il reste un montant à régler chez {{ shop.name }}. Merci de votre fidélité !</p>
+<div class="lines">
+  {% for item in open_items %}
+  <div class="line"><strong><span>{{ item.label }}</span><span>{{ item.due | fcfa }}</span></strong><span>{{ item.date }} · reçu n° {{ item.receipt }}</span></div>
+  {% endfor %}
+</div>
+<div class="band due"><span class="label">À régler</span><span class="amount display">{{ due | fcfa }} FCFA</span></div>
+<div class="pay">
+  <strong>Payer par</strong>
+  {% for method in pay_to %}
+  <div class="row"><span>{{ method.name }}</span><strong style="letter-spacing:0;text-transform:none;font-size:16px">{{ method.number }}</strong></div>
+  {% endfor %}
+  <span class="note" style="font-size:14px">Ou directement à la boutique. Déjà payé ? Merci, ignorez ce message.</span>
+</div>
+{% endblock %}
+{% block seal %}Rappel envoyé par {{ shop.name }} avec Kayé{% endblock %}

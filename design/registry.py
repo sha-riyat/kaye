@@ -24,6 +24,13 @@ ITEMS: list[Item] = [
     Item("recu-ticket", "Reçu · ticket", "recu_ticket.html.j2", "recu", 1080, 1500, 0, 0),
     Item("recu-carte", "Reçu · carte", "recu_carte.html.j2", "recu", 1080, 1500, 1160, 0),
     Item("recu-cahier", "Reçu · cahier", "recu_cahier.html.j2", "recu", 1080, 1500, 2320, 0),
+    # The ticket family, chosen for every document.
+    Item("facture-ticket", "Facture · ticket", "facture.html.j2", "facture", 1080, 1700, 0, 1700),
+    Item("proforma-ticket", "Pro forma · ticket", "proforma.html.j2", "proforma", 1080, 1600, 1160, 1700),
+    Item("rappel-ticket", "Rappel de paiement · ticket", "rappel.html.j2", "rappel", 1080, 1550, 2320, 1700),
+    Item("releve-ticket", "Relevé client · ticket", "releve.html.j2", "releve", 1080, 1650, 3480, 1700),
+    Item("quittance-ticket", "Quittance · ticket", "quittance.html.j2", "quittance", 1080, 1450, 4640, 1700),
+    Item("bilan-ticket", "Bilan du jour · ticket", "bilan.html.j2", "bilan", 1080, 1750, 5800, 1700),
 ]
 
 

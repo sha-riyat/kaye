@@ -1,0 +1,17 @@
+{% extends "_ticket.html.j2" %}
+{% block kind %}Quittance n° {{ number }}{% endblock %}
+{% block doc_h %}1450{% endblock %}
+{% block head_meta %}
+<div class="row"><span class="doc-kind">Quittance n° {{ number }}</span><span class="label">{{ date }} · {{ time }}</span></div>
+<div class="row"><span class="label">Client·e</span><strong>{{ customer }}</strong></div>
+{% endblock %}
+{% block body %}
+<div class="row" style="font-size:18px"><span class="label">Dette avant paiement</span><span>{{ before | fcfa }} FCFA</span></div>
+<div class="ok"><span>Reçu · {{ method }}</span><span>{{ amount | fcfa }} FCFA</span></div>
+<div class="row" style="font-size:15px"><span class="label">Référence {{ method }}</span><span>{{ reference }}</span></div>
+<div class="rule"></div>
+<div class="band paid"><span class="label">Dette soldée</span><span class="amount display">0 FCFA</span></div>
+<p class="note">{{ shop.name }} confirme avoir reçu le paiement de {{ customer }}. Plus rien n'est dû. Merci !</p>
+{% endblock %}
+{% block extra_css %}.stamp { top: 40px; right: 16px; width: 186px; height: 186px; color: var(--lagune); }{% endblock %}
+{% block stamp %}<div class="stamp" aria-label="Tampon : soldé"><span class="big">SOLDÉ</span><span class="small">{{ date }}</span></div>{% endblock %}

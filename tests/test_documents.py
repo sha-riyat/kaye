@@ -24,12 +24,24 @@ def test_receipt_fixture_amounts_are_consistent():
 
 @pytest.mark.parametrize("item", registry.ITEMS, ids=lambda i: i.id)
 def test_every_registry_item_renders(item):
-    html = render(item.template, FIXTURES[item.fixture]())
     data = FIXTURES[item.fixture]()
+    html = render(item.template, data)
     assert data["shop"]["name"] in html
-    assert fcfa(data["total"]) in html
-    assert fcfa(data["due"]) in html
+    for key in ("total", "due", "balance", "sales", "outstanding", "amount"):
+        if key in data:
+            assert fcfa(data[key]) in html, key
     assert "/brand/" in html
+
+
+def test_story_is_consistent_across_documents():
+    statement = FIXTURES["releve"]()
+    reminder = FIXTURES["rappel"]()
+    summary = FIXTURES["bilan"]()
+    ama = next(d for d in summary["debtors"] if d["name"] == "Ama Koudjo")
+    assert statement["balance"] == reminder["due"] == ama["due"]
+    assert summary["sales"] == summary["cashed"] + summary["credit"]
+    invoice = FIXTURES["facture"]()
+    assert invoice["total"] == sum(line["total"] for line in invoice["lines"])
 
 
 def test_registry_ids_and_names_unique():

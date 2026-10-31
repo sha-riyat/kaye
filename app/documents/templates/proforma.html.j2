@@ -1,0 +1,21 @@
+{% extends "_ticket.html.j2" %}
+{% block kind %}Pro forma n° {{ number }}{% endblock %}
+{% block doc_h %}1600{% endblock %}
+{% block head_meta %}
+<div class="row"><span class="doc-kind">Pro forma n° {{ number }}</span><span class="label">{{ date }}</span></div>
+<div class="row"><span class="label">Pour</span><strong>{{ customer.name }}</strong></div>
+<div class="row"><span class="label">Valable jusqu'au</span><strong>{{ valid_until }}</strong></div>
+{% endblock %}
+{% block body %}
+<div class="lines">
+  {% for line in lines %}
+  <div class="line"><strong><span>{{ line.product }}</span><span>{{ line.total | fcfa }}</span></strong><span>{{ line.detail }} × {{ line.unit_price | fcfa }}</span></div>
+  {% endfor %}
+</div>
+<div class="rule"></div>
+<div class="total"><span class="label">Montant estimé</span><span class="amount display">{{ total | fcfa }} <small>FCFA</small></span></div>
+<p class="note">Ce document est un devis : il ne vaut ni facture ni reçu. Les prix sont garantis jusqu'au {{ valid_until }}, dans la limite du stock.</p>
+{% endblock %}
+{% block seal %}Pro forma établie avec Kayé · code {{ code }}{% endblock %}
+{% block extra_css %}.stamp { top: 40px; right: 16px; width: 186px; height: 186px; color: #6E6478; }{% endblock %}
+{% block stamp %}<div class="stamp" aria-label="Tampon : devis"><span class="big">DEVIS</span><span class="small">Pro forma</span></div>{% endblock %}

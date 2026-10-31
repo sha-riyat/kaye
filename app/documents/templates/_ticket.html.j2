@@ -1,0 +1,79 @@
+{#- Shared "ticket" layout for every document Kayé sends: paper ticket on Nuit, kente edge, torn bottom.
+    Child templates fill: kind (title), doc_h (canvas height), head_meta, body, and optionally stamp. -#}
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>{% block kind %}{% endblock %} · {{ shop.name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+{% include "_brand.css" %}
+.doc { width: 1080px; height: {% block doc_h %}1500{% endblock %}px; background: var(--nuit); display: flex; align-items: center; justify-content: center; }
+.ticket { width: 680px; position: relative; filter: drop-shadow(0 30px 60px rgba(0,0,0,.45)); }
+.paper { background: var(--papier); border-radius: 14px 14px 0 0; overflow: hidden; }
+.kente { height: 26px; background: url("{{ asset('pattern-kente.svg') }}") 0 -120px / 700px auto; }
+.body { padding: 44px 56px 36px; display: flex; flex-direction: column; gap: 22px; }
+.head { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.head .shop-logo { width: 84px; height: 84px; border-radius: 50%; font-size: 42px; }
+.head .name { font-size: 34px; font-weight: 700; }
+.head .meta { font-size: 17px; color: var(--gris); line-height: 1.5; }
+.rule { border-top: 2px dashed var(--trait); }
+.row { display: flex; justify-content: space-between; gap: 16px; font-size: 17px; }
+.row .label { color: var(--gris); }
+.doc-kind { font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.lines { display: flex; flex-direction: column; gap: 16px; font-size: 18px; }
+.line strong { display: flex; justify-content: space-between; gap: 16px; font-weight: 600; }
+.line span { font-size: 15px; color: var(--gris); }
+.total { display: flex; justify-content: space-between; align-items: baseline; }
+.total .label { font-size: 18px; font-weight: 600; }
+.total .amount { font-size: 40px; font-weight: 700; }
+.total .amount small { font-size: 20px; font-weight: 500; }
+.ok { display: flex; justify-content: space-between; font-size: 18px; font-weight: 600; color: var(--lagune); }
+.band { border-radius: 14px; padding: 18px 22px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.band .label { font-size: 17px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.band .amount { font-size: 34px; font-weight: 700; }
+.band.due { background: var(--laterite); color: var(--papier); }
+.band.paid { background: var(--lagune); color: var(--papier); }
+.band.info { background: var(--cauri); color: var(--nuit); }
+.note { margin: 0; font-size: 16px; line-height: 1.55; color: var(--gris); }
+.pay { border-radius: 14px; border: 2px solid var(--trait); padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; font-size: 16px; }
+.pay strong { font-size: 15px; letter-spacing: .1em; text-transform: uppercase; }
+.pay .row { font-size: 16px; }
+.seal { display: flex; align-items: center; justify-content: center; gap: 12px; padding-top: 10px; font-size: 14px; color: var(--gris); }
+.seal img { width: 26px; height: 26px; }
+.tear { display: block; }
+.stamp {
+  position: absolute; right: 34px; width: 210px; height: 210px; border-radius: 50%;
+  border: 5px solid currentColor; transform: rotate(-12deg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; opacity: .9;
+}
+.stamp::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; border: 2px solid currentColor; }
+.stamp .big { font-family: var(--display); font-size: 30px; font-weight: 800; letter-spacing: .04em; }
+.stamp .small { font-size: 13px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+{% block extra_css %}{% endblock %}
+</style>
+</head>
+<body>
+<div class="doc">
+  <div class="ticket">
+    <div class="paper">
+      <div class="kente"></div>
+      <div class="body">
+        <div class="head">
+          <div class="shop-logo" aria-label="Logo de {{ shop.name }}">{{ shop.initial }}</div>
+          <span class="name display">{{ shop.name }}</span>
+          <span class="meta">{{ shop.activity }} · {{ shop.address }}<br>{{ shop.phone }}</span>
+        </div>
+        <div class="rule"></div>
+        {% block head_meta %}{% endblock %}
+        <div class="rule"></div>
+        {% block body %}{% endblock %}
+        <div class="seal"><img src="{{ asset('symbol-solaire.svg') }}" alt=""><span>{% block seal %}Noté par Kayé · code {{ code }}{% endblock %}</span></div>
+      </div>
+    </div>
+    <svg class="tear" aria-hidden="true" width="680" height="22" viewBox="0 0 680 22" preserveAspectRatio="none"><path fill="#FFFDF8" d="M0 0 H680 V8 {% for i in range(40) %}L{{ 680 - i * 17 - 8.5 }} {{ 22 if i % 2 == 0 else 8 }} {% endfor %}L0 8 Z"/></svg>
+    {% block stamp %}{% endblock %}
+  </div>
+</div>
+</body>
+</html>

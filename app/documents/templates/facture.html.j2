@@ -1,0 +1,27 @@
+{% extends "_ticket.html.j2" %}
+{% block kind %}Facture n° {{ number }}{% endblock %}
+{% block doc_h %}1700{% endblock %}
+{% block head_meta %}
+<div class="row"><span class="doc-kind">Facture n° {{ number }}</span><span class="label">{{ date }}</span></div>
+<div class="row"><span class="label">Client</span><strong>{{ customer.name }}</strong></div>
+<div class="row"><span class="label">Contact</span><span>{{ customer.phone }}</span></div>
+<div class="row"><span class="label">À payer avant le</span><strong>{{ due_date }}</strong></div>
+{% endblock %}
+{% block body %}
+<div class="lines">
+  {% for line in lines %}
+  <div class="line"><strong><span>{{ line.product }}</span><span>{{ line.total | fcfa }}</span></strong><span>{{ line.detail }} × {{ line.unit_price | fcfa }}</span></div>
+  {% endfor %}
+</div>
+<div class="rule"></div>
+<div class="total"><span class="label">Total à payer</span><span class="amount display">{{ total | fcfa }} <small>FCFA</small></span></div>
+<div class="band info"><span class="label">Statut</span><span class="amount display" style="font-size:24px">Non payée</span></div>
+<div class="pay">
+  <strong>Payer par</strong>
+  {% for method in pay_to %}
+  <div class="row"><span>{{ method.name }}</span><strong style="letter-spacing:0;text-transform:none;font-size:16px">{{ method.number }}</strong></div>
+  {% endfor %}
+  <span class="note" style="font-size:14px">Indiquez « {{ number }} » en motif du transfert.</span>
+</div>
+{% endblock %}
+{% block seal %}Facture établie avec Kayé · code {{ code }}{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "_ticket.html.j2" %}
+{% block kind %}Relevé de {{ customer }}{% endblock %}
+{% block doc_h %}1650{% endblock %}
+{% block head_meta %}
+<div class="row"><span class="doc-kind">Relevé de compte</span><span class="label">{{ period }}</span></div>
+<div class="row"><span class="label">Client·e</span><strong>{{ customer }}</strong></div>
+{% endblock %}
+{% block extra_css %}
+.ops { display: flex; flex-direction: column; font-size: 16px; }
+.op { display: grid; grid-template-columns: 76px 1fr auto; gap: 14px; padding: 12px 0; border-bottom: 1px solid #EFE5D3; align-items: baseline; }
+.op:last-child { border-bottom: 0; }
+.op .d { color: var(--gris); }
+.op .plus { color: var(--laterite); font-weight: 600; }
+.op .minus { color: var(--lagune); font-weight: 600; }
+{% endblock %}
+{% block body %}
+<div class="ops">
+  {% for op in operations %}
+  <div class="op"><span class="d">{{ op.date }}</span><span>{{ op.label }}</span><span class="{{ 'plus' if op.delta > 0 else 'minus' }}">{{ '+' if op.delta > 0 else '−' }} {{ op.delta | abs | fcfa }}</span></div>
+  {% endfor %}
+</div>
+<div class="rule"></div>
+<p class="note" style="font-size:14px">« + » : achats à crédit · « − » : paiements reçus</p>
+<div class="band {{ 'due' if balance > 0 else 'paid' }}"><span class="label">{{ 'Solde dû' if balance > 0 else 'Compte soldé' }}</span><span class="amount display">{{ balance | fcfa }} FCFA</span></div>
+{% endblock %}
+{% block seal %}Relevé établi avec Kayé · {{ operations | length }} opérations{% endblock %}
