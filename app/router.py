@@ -45,6 +45,14 @@ class Outcome:
 async def handle_message(msg: InboundMessage, svc: Services) -> None:
     log.info("handling %s message %s from %s", msg.type, msg.wamid, msg.sender)
     wa = svc.wa.from_number(msg.phone_number_id)
+    if msg.sender in svc.settings.blocked:
+        # No reply, no model call. They just wrote, so Meta now accepts a real block too.
+        try:
+            await wa.block(msg.sender)
+            log.info("blocked %s at Meta", msg.sender)
+        except WhatsAppError as exc:
+            log.warning("ignored blocked number %s; Meta block failed: %s", msg.sender, exc)
+        return
     await wa.mark_read(msg.wamid)
 
     text, source, media_bytes, mime, voice = msg.text, EntrySource.TEXT, None, "", None

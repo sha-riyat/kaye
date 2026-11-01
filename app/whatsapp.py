@@ -139,6 +139,16 @@ class WhatsAppClient:
         }  # fmt: skip
         return (await self._post(payload))["messages"][0]["id"]
 
+    async def block(self, user: str) -> None:
+        """Block a number at Meta. Only accepted within 24 h of that user's last message."""
+        response = await self._http.post(
+            f"{self._base_url}/{self.phone_number_id}/block_users",
+            json={"messaging_product": "whatsapp", "block_users": [{"user": user}]},
+            headers=self._auth,
+        )
+        if response.is_error:
+            raise WhatsAppError(f"block {response.status_code}: {response.text}")
+
     async def deliver(self, to: str, reply: Reply, reply_to: str | None = None) -> None:
         """Send a Reply in the richest form WhatsApp allows."""
         text = reply.text + (f"\n\n{reply.link}" if reply.link else "")

@@ -62,12 +62,16 @@ class FakeWA:
     def __init__(self) -> None:
         self.sent: list[Reply] = []
         self.media = b"IMAGE-BYTES"
+        self.blocked: list[str] = []
 
     def from_number(self, _):
         return self
 
     async def mark_read(self, _):
         pass
+
+    async def block(self, user):
+        self.blocked.append(user)
 
     async def download_media(self, _):
         return self.media, "image/jpeg"
@@ -187,6 +191,17 @@ async def test_onboarding_names_the_shop(db, models):
     async with db.session() as s:
         assert (await s.exec(select(Shop))).one().name == "Chez Afi"
     assert models.calls == []  # onboarding never costs a model call
+
+
+async def test_a_blocked_number_gets_no_reply_and_no_shop(db, models):
+    wa = FakeWA()
+    settings = Settings(_env_file=None, blocked_numbers="+22990000000, 22991111111")
+    c = Chat(Services(settings, wa, FakeTranscriber(), db, Agent(models), None), models, wa)
+    c.sender = "22991111111"
+    assert await c.send(text="Bonjour") == []
+    assert wa.blocked == ["22991111111"]
+    async with db.session() as s:
+        assert (await s.exec(select(Shop))).all() == []
 
 
 async def test_an_overlong_shop_name_is_asked_again(db, models):

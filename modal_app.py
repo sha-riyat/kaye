@@ -17,7 +17,8 @@ image = (
     # add_local_python_source only ships .py files: the document templates need their own mount
     .add_local_dir("app/documents/templates", remote_path="/root/app/documents/templates")
 )
-secrets = [modal.Secret.from_name("kaye-secrets")]
+# kaye-blocklist holds BLOCKED_NUMBERS apart, so re-creating kaye-secrets from .env keeps it
+secrets = [modal.Secret.from_name("kaye-secrets"), modal.Secret.from_name("kaye-blocklist")]
 
 
 # No automatic retries: a retried job could send the same reply (or write the same entry) twice.

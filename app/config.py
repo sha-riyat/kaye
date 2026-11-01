@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     # Abuse protection
     daily_message_quota_per_user: int = 100
     global_daily_model_budget_usd: float = 5.0
+    # Comma-separated WhatsApp ids we never answer (kept in the Modal Secret, not in the repo)
+    blocked_numbers: str = ""
+
+    @property
+    def blocked(self) -> set[str]:
+        return {n.strip().lstrip("+") for n in self.blocked_numbers.split(",") if n.strip()}
 
 
 @lru_cache
