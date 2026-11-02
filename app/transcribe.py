@@ -87,13 +87,13 @@ class Transcriber:
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def transcribe(self, audio: bytes) -> Transcript:
+    async def transcribe(self, audio: bytes, language: str = "French") -> Transcript:
         wav = await to_wav(audio)
         request = {
             "model": self._settings.transcribe_model,
             "audioEncoding": "WAV",
             "mode": "PUSH_TO_TALK",
-            "languageBias": ["French"],
+            "languageBias": [language],
             "keywords": KEYWORDS,
         }
         response = await self._http.post(

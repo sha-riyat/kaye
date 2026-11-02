@@ -7,6 +7,7 @@ templates. We try a free message first and fall back to the template named in se
 import logging
 from datetime import timedelta
 
+from app import language
 from app.agent import actions
 from app.agent.reply import Reply
 from app.db import ledger, queries
@@ -44,6 +45,7 @@ async def _evening_summary(svc: Services, session, shop: Shop, owner: AppUser, n
     if today.operations == 0 and owed == 0:
         return
     reply = await summary_reply(session, svc, shop, "today", now)
+    [reply] = await language.localize(svc.agent.models, session, shop.id, shop.language, [reply])
     short = f"ventes {actions.money(today.sales)} FCFA, à encaisser {actions.money(owed)} FCFA"
     await _send(svc, owner.whatsapp_id, reply, template_params=[shop.name, short])
 
@@ -57,7 +59,9 @@ async def _supplier_reminders(svc: Services, session, shop: Shop, owner: AppUser
     for d in due:
         when = "aujourd'hui" if d.due_date <= now.date() else "demain"
         lines.append(f"• {d.contact.name} : {actions.money(d.balance)} FCFA, à payer {when}")
-    await _send(svc, owner.whatsapp_id, Reply("*Rappel fournisseurs*\n" + "\n".join(lines)), template_params=None)
+    reply = Reply("*Rappel fournisseurs*\n" + "\n".join(lines))
+    [reply] = await language.localize(svc.agent.models, session, shop.id, shop.language, [reply])
+    await _send(svc, owner.whatsapp_id, reply, template_params=None)
 
 
 async def _send(svc: Services, to: str, reply: Reply, template_params: list[str] | None) -> None:

@@ -105,11 +105,15 @@ corrige avec **Corriger**, avec ses propres mots.
 ### Commerçant : 2 minutes, rien à installer
 
 1. Écrivez **« Bonjour »** au [+228 71 67 45 79](https://wa.me/22871674579?text=Bonjour).
-2. Répondez avec le nom de votre boutique, par exemple « Chez Afi ».
-3. Envoyez votre première opération : un vocal « J'ai vendu 2 sacs de riz à Ama à 12 000 le sac, elle
+2. Choisissez **Français** ou **English**. Les commerçants d'Afrique de l'Ouest francophone utilisent
+   le français ; **l'anglais est là pour les juges** du hackathon : on peut écrire ou parler en
+   anglais, et chaque réponse est traduite (les tickets en image restent en français). Écrivez
+   « langue » à tout moment pour changer.
+3. Répondez avec le nom de votre boutique, par exemple « Chez Afi ».
+4. Envoyez votre première opération : un vocal « J'ai vendu 2 sacs de riz à Ama à 12 000 le sac, elle
    a payé 20 000 », ou la photo de la page du jour de votre cahier.
-4. Vérifiez le récapitulatif et appuyez sur **Oui**. Le reçu arrive, prêt à transférer.
-5. Demandez « bilan » le soir, « stock » avant de commander, « qui me doit ? » pour relancer.
+5. Vérifiez le récapitulatif et appuyez sur **Oui**. Le reçu arrive, prêt à transférer.
+6. Demandez « bilan » le soir, « stock » avant de commander, « qui me doit ? » pour relancer.
 
 Les photos se lisent mieux à plat, bien éclairées, la page entière dans le cadre. Pour mettre votre
 logo, envoyez-le en photo avec la légende « logo ». Pour tout effacer : « supprimer mes données ».

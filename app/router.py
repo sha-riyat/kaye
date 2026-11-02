@@ -10,6 +10,7 @@ from datetime import timedelta
 
 from sqlmodel import select
 
+from app import language
 from app.agent import actions
 from app.agent.actions import Ctx
 from app.agent.prompts import AFTER_NAME, DEMO_NOTICE, WELCOME
@@ -76,7 +77,8 @@ async def handle_message(msg: InboundMessage, svc: Services) -> None:
         if msg.type == "audio" and msg.media_id:
             media_bytes, mime = await wa.download_media(msg.media_id)
             mime = mime or "audio/ogg"
-            transcript = voice = await svc.transcriber.transcribe(media_bytes)
+            spoken = "English" if await _language_of(svc, msg.sender) == language.ENGLISH else "French"
+            transcript = voice = await svc.transcriber.transcribe(media_bytes, spoken)
             if not transcript.text:
                 await wa.send_text(msg.sender, EMPTY_AUDIO_REPLY, reply_to=msg.wamid)
                 return
@@ -113,16 +115,39 @@ async def handle_message(msg: InboundMessage, svc: Services) -> None:
             log.exception("could not deliver a reply to %s", msg.sender)
 
 
+async def _language_of(svc: Services, wa_id: str) -> str | None:
+    """The sender's shop language, to bias the transcription before the message is processed."""
+    async with svc.db.session() as session:
+        user = await queries.user_by_whatsapp(session, wa_id)
+        shop = await session.get(Shop, user.shop_id) if user else None
+        return shop.language if shop else None
+
+
 async def _process(session, svc: Services, msg: InboundMessage, text: str | None, source: str,
                    media_bytes: bytes | None, mime: str, voice=None) -> list[Reply]:  # fmt: skip
     user = await queries.user_by_whatsapp(session, msg.sender)
     if user is None:
         await queries.create_shop_with_owner(session, msg.sender, msg.profile_name)
-        return [Reply(WELCOME), Reply(DEMO_NOTICE)]
+        return [language.choose()]  # in both languages
     shop = await session.get(Shop, user.shop_id)
+    replies, erased = await _respond(session, svc, msg, user, shop, text, source, media_bytes, mime, voice)
+    # an erased shop is gone: its translation is logged without it
+    return await language.localize(svc.agent.models, session, None if erased else shop.id, shop.language, replies)
+
+
+async def _respond(session, svc: Services, msg: InboundMessage, user, shop: Shop, text: str | None, source: str,
+                   media_bytes: bytes | None, mime: str, voice=None) -> tuple[list[Reply], bool]:  # fmt: skip
+    if shop.language is None:
+        tapped = msg.button_id or ""
+        picked = language.chosen(tapped.partition(":")[2] if tapped.startswith("lang:") else text)
+        if picked is None:
+            return [language.choose()], False
+        shop.language = picked
+        session.add(shop)
+        return [Reply(WELCOME), Reply(DEMO_NOTICE)], False
 
     if not shop.name:
-        return await _name_shop(session, shop, text if msg.type in ("text", "audio") else None)
+        return await _name_shop(session, shop, text if msg.type in ("text", "audio") else None), False
 
     ctx = Ctx(session=session, shop=shop, user=user, wamid=msg.wamid, source=source, media=svc.media)
     if voice is not None:
@@ -145,14 +170,14 @@ async def _process(session, svc: Services, msg: InboundMessage, text: str | None
             expanded.append(r)
     replies = expanded
     if ctx.erased:
-        return replies  # the shop and its history are gone: nothing to remember
+        return replies, True  # the shop and its history are gone: nothing to remember
     said = (
         text if msg.type in ("text", "audio") else ("[photo]" if msg.type == "image" else f"[{msg.text or 'bouton'}]")
     )
     await queries.remember(session, shop.id, user.id, "merchant", said or "")
     for reply in replies:
         await queries.remember(session, shop.id, user.id, "kaye", reply.text)
-    return replies
+    return replies, False
 
 
 async def _handle(ctx: Ctx, svc: Services, msg: InboundMessage, text: str | None,
@@ -171,6 +196,8 @@ async def _handle(ctx: Ctx, svc: Services, msg: InboundMessage, text: str | None
         return replies
 
     if text:
+        if queries.norm(text).strip(" ?!.") in language.ASK_AGAIN:
+            return [language.choose()]
         if (blocked := await _guard(ctx, svc)) is not None:
             return [blocked]
         if msg.type == "audio" and media_bytes:
@@ -270,6 +297,10 @@ async def _logo_proposals(ctx: Ctx, svc: Services) -> list[Reply]:
 
 async def _on_button(ctx: Ctx, svc: Services, button_id: str) -> list[Reply]:
     action, _, rest = button_id.partition(":")
+    if action == "lang" and (picked := language.chosen(rest)):
+        ctx.shop.language = picked
+        ctx.session.add(ctx.shop)
+        return [Reply(language.SET[picked])]
     if action == "rem":
         from app.db.models import Contact
 

@@ -86,6 +86,7 @@ class Shop(SQLModel, table=True):
     currency: str = "XOF"
     timezone: str = "Africa/Lome"
     summary_hour: int = 20  # local hour of the evening summary
+    language: str | None = Field(default=None, sa_type=String(2))  # fr, en (judges); None = not chosen yet
     created_at: datetime | None = _created_at()
 
 

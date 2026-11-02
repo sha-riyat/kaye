@@ -106,12 +106,16 @@ right; a few product words came back marked ❓, and the merchant fixes them wit
 ### For a merchant: 2 minutes, nothing to install
 
 1. Write **« Bonjour »** (*hello*) to [+228 71 67 45 79](https://wa.me/22871674579?text=Bonjour).
-2. Answer with the name of your shop, for example « Chez Afi ».
-3. Send your first operation: a voice note « J'ai vendu 2 sacs de riz à Ama à 12 000 le sac, elle a
+2. Choose **Français** or **English**. Merchants in francophone West Africa use French; **English is
+   there for the judges**: you can write or speak in English, and every reply is translated (the
+   ticket images stay in French). Write « language » at any time to switch.
+3. Answer with the name of your shop, for example « Chez Afi ».
+4. Send your first operation: a voice note « J'ai vendu 2 sacs de riz à Ama à 12 000 le sac, elle a
    payé 20 000 » (*I sold 2 bags of rice to Ama at 12,000 a bag, she paid 20,000*), or a photo of
    today's page of your notebook.
-4. Check the recap and tap **Oui**. The receipt arrives, ready to forward.
-5. Ask « bilan » in the evening, « stock » before ordering, « qui me doit ? » to chase payments.
+5. Check the recap and tap **Oui** (*Yes*). The receipt arrives, ready to forward.
+6. Ask « bilan » (*summary*) in the evening, « stock » before ordering, « qui me doit ? » (*who owes
+   me?*) to chase payments.
 
 Photos read best flat, well lit, with the whole page in the frame. To use your own logo, send it as
 a photo with the caption « logo ». To erase everything: « supprimer mes données » (*delete my data*).

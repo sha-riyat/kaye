@@ -38,6 +38,9 @@ SHORTCUTS = {
     "recu": "resend_receipt", "le recu": "resend_receipt", "mon recu": "resend_receipt",
     "renvoie le recu": "resend_receipt",
     "supprimer mes donnees": "erase_my_data", "efface mes donnees": "erase_my_data",
+    # English, for the hackathon judges (temporary, see app/language.py)
+    "summary": "summary", "who owes me": "list_debtors", "my stock": "stock_levels",
+    "receipt": "resend_receipt", "undo": "propose_correction", "delete my data": "erase_my_data",
 }  # fmt: skip
 
 

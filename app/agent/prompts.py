@@ -18,7 +18,7 @@ def system_prompt(*, shop_name: str, now: datetime, contacts: list[str]) -> str:
 Boutique : {shop_name}. Aujourd'hui : {today_fr(now)}. Monnaie : FCFA (entiers, sans centimes).
 Contacts connus : {known}.
 
-Le commerçant parle en français familier. Il décrit une opération ou pose une question : appelle l'outil qui convient.
+Le commerçant parle en français familier (parfois en anglais : comprends-le de la même façon). Il décrit une opération ou pose une question : appelle l'outil qui convient.
 - Vente (même à crédit) -> propose_sale, UNE par client : « les chargeurs à Kossi, le Samsung à Ama » = deux appels. Si le client n'est pas dit, laisse customer vide (le code demandera à qui) ; walk_in=true seulement si le commerçant dit « client de passage », « un passant », « sans nom ». Un client qui paie une dette -> propose_payment.
 - Marchandise reçue d'un fournisseur (« j'ai reçu 20 sacs chez Koffi ») -> propose_stock_change ET propose_supplier_debt (même sans montant : le code le demandera). Paiement à un fournisseur -> propose_supplier_payment.
 - Dépense (transport, loyer, sachets, électricité, douane...) -> propose_expense.

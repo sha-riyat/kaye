@@ -89,7 +89,10 @@ class FakeWA:
 class FakeTranscriber:
     text = "j'ai vendu du riz"
 
-    async def transcribe(self, _):
+    language = None
+
+    async def transcribe(self, _, language="French"):
+        FakeTranscriber.language = language
         return Transcript(text=self.text, audio_duration_ms=1000)
 
     async def aclose(self):
@@ -160,7 +163,8 @@ async def chat(db, models):
     wa = FakeWA()
     svc = Services(settings, wa, FakeTranscriber(), db, Agent(models), storage=None)
     c = Chat(svc, models, wa)
-    await c.send(text="Bonjour")  # welcome
+    await c.send(text="Bonjour")  # language
+    await c.tap("lang:fr")  # welcome
     await c.send(text="Chez Afi")  # shop name
     return c
 
@@ -188,7 +192,9 @@ async def test_onboarding_names_the_shop(db, models):
     wa = FakeWA()
     svc = Services(settings, wa, FakeTranscriber(), db, Agent(models), storage=None)
     c = Chat(svc, models, wa)
-    welcome = await c.send(text="Bonjour")
+    first = await c.send(text="Bonjour")
+    assert first[0].buttons == [("lang:fr", "Français"), ("lang:en", "English")]
+    welcome = await c.tap("lang:fr")
     assert "Comment s'appelle votre boutique" in welcome[0].text
     assert "démo" in welcome[1].text
     named = await c.send(text="Chez Afi")
@@ -213,6 +219,7 @@ async def test_an_overlong_shop_name_is_asked_again(db, models):
     wa = FakeWA()
     c = Chat(Services(Settings(_env_file=None), wa, FakeTranscriber(), db, Agent(models), None), models, wa)
     await c.send(text="Bonjour")
+    await c.tap("lang:fr")
     again = await c.send(text="x" * 200)
     assert "comment s'appelle votre boutique" in again[0].text.lower()
 
@@ -779,13 +786,14 @@ async def test_erase_my_data_wipes_everything_after_a_yes(chat, db):
         assert (await s.exec(select(Entry))).all() == [] and (await s.exec(select(Contact))).all() == []
         assert (await s.exec(select(Shop))).all() == []
     again = await chat.send(text="Bonjour")
-    assert "comment s'appelle votre boutique" in again[0].text.lower()  # a first contact again
+    assert "quelle langue" in again[0].text.lower()  # a first contact again: the language comes first
 
 
 async def test_a_greeting_is_never_taken_as_the_shop_name(db, models):
     wa = FakeWA()
     c = Chat(Services(Settings(_env_file=None), wa, FakeTranscriber(), db, Agent(models), None), models, wa)
     await c.send(text="Bonjour")
+    await c.tap("lang:fr")
     again = await c.send(text="Salut !")
     assert "comment s'appelle votre boutique" in again[0].text.lower()
 
@@ -915,3 +923,52 @@ async def test_a_register_page_is_dated_from_what_is_written(chat, db):
     chat.models.say(old)
     recap = await chat.send("image", media_id="R3")
     assert "vente(s) dans" in recap[0].text  # a far-off date is not trusted: counted today
+
+
+# --- English for the judges (temporary) ---
+
+
+async def test_english_is_chosen_first_and_replies_are_translated(db, models):
+    wa = FakeWA()
+    c = Chat(Services(Settings(_env_file=None), wa, FakeTranscriber(), db, Agent(models), None), models, wa)
+    choice = await c.send(text="Hello")
+    assert "Which language" in choice[0].text and models.calls == []
+    models.say('{"texts": ["Hello! I am *Kayé* 👋 What is the name of your shop?", "_Demo mode._"]}')
+    welcome = await c.send(text="English")  # typed instead of tapped
+    assert welcome[0].text.startswith("Hello! I am *Kayé*") and welcome[1].text == "_Demo mode._"
+    assert models.calls[-1]["response_format"]["json_schema"]["name"] == "Translation"
+    models.say('{"texts": ["*Afi Shop* is ready! ✅"]}')
+    await c.send(text="Afi Shop")
+    models.say('{"texts": ["*Today\'s summary*\\nNo operation recorded."]}')
+    summary = await c.send(text="summary")  # English shortcut: the only model call is the translation
+    assert summary[0].text.startswith("*Today's summary*")
+    async with db.session() as s:
+        shop = (await s.exec(select(Shop))).one()
+        assert shop.language == "en"
+        from app.db.models import ModelCall
+
+        assert len((await s.exec(select(ModelCall))).all()) == 3  # welcome, name, summary: each translation costed
+
+
+async def test_a_failed_translation_sends_the_french(chat, models, db):
+    async with db.session() as s:
+        shop = (await s.exec(select(Shop))).one()
+        shop.language = "en"
+        s.add(shop)
+    models.say('{"texts": []}')  # wrong count
+    replies = await chat.send(text="bilan")
+    assert "Bilan du jour" in replies[0].text
+
+
+async def test_the_language_can_be_changed_later(chat, models):
+    ask = await chat.send(text="langue")
+    assert ask[0].buttons[1] == ("lang:en", "English")
+    models.say('{"texts": ["Noted: I will answer in English."]}')  # translated, since English is now set
+    done = await chat.tap("lang:en")
+    assert done[0].text == "Noted: I will answer in English."
+    chat.models.say(SALE)
+    chat.models.say('{"texts": ["*Sale to Ama Koudjo*", "Yes, record", "Fix", "Cancel"]}')
+    recap = await chat.send("audio", media_id="V1")
+    assert FakeTranscriber.language == "English"
+    assert recap[0].text == "*Sale to Ama Koudjo*" and recap[0].buttons[0][1] == "Yes, record"
+    assert recap[0].buttons[0][0].startswith("ok:")  # ids are never translated
