@@ -48,3 +48,4 @@ dev = [
 
 [tool.ruff.lint.per-file-ignores]
 "app/agent/prompts.py" = ["E501"]  # prose
+"scripts/brand_export.py" = ["E501"]  # inline HTML and CSS
