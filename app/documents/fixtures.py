@@ -140,10 +140,10 @@ def daily_summary() -> dict:
         {"name": "Edem Agbeko", "due": 7_500, "since": "30/10"},
         {"name": "Yao Dzifa", "due": 4_000, "since": "29/10"},
     ]
-    cashed, credit = 112_000, 36_500
+    cashed, credit, repaid, expenses = 112_000, 36_500, 14_000, 5_000
     return {
         "shop": SHOP,
-        "date": "31/10/2026",
+        "title": "Bilan du jour",
         "date_long": "vendredi 31 octobre 2026",
         "time": "20:00",
         "operations": 23,
@@ -151,9 +151,15 @@ def daily_summary() -> dict:
         "cashed": cashed,
         "credit": credit,
         "mobile_money": 28_000,
-        "repaid": 14_000,
+        "repaid": repaid,
+        "expenses": expenses,
+        "supplier_paid": 0,
+        "cash_in_hand": cashed + repaid - expenses,
         "debtors": debtors,
+        "more_debtors": 0,
         "outstanding": sum(d["due"] for d in debtors),
+        "supplier_dues": [{"name": "Koffi", "due": 180_000, "date": "07/11"}],
+        "low_stock": [{"name": "tomate concentrée", "stock": 2}, {"name": "huile 5 L", "stock": 3}],
     }
 
 

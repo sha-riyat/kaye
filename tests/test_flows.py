@@ -137,11 +137,16 @@ async def db():
 
 
 @pytest.fixture(autouse=True)
-def fast_receipts(monkeypatch):
+def rendered(monkeypatch) -> list[tuple[str, dict]]:
+    """Documents drawn during a test, as (template, data); no Chromium."""
+    drawn: list[tuple[str, dict]] = []
+
     async def fake_render(template, data, extra=0):
-        return b"\x89PNG-" + data["number"].encode()
+        drawn.append((template, data))
+        return b"\x89PNG-" + template.encode()
 
     monkeypatch.setattr(router, "render_png", fake_render)
+    return drawn
 
 
 @pytest.fixture
@@ -455,7 +460,7 @@ async def test_stock_question_is_answered_by_code(chat, models):
     assert pending[0].text.startswith("Je ne suis encore aucun stock") or "huile" in pending[0].text
 
 
-async def test_expense_and_cash_in_the_daily_summary(chat):
+async def test_expense_and_cash_in_the_daily_summary(chat, rendered):
     sale = await chat.say("vente", SALE)
     await chat.tap(sale[0].buttons[0][0])
     spend = await chat.say("transport 3 500", ("propose_expense", {"amount": 3_500, "label": "transport"}))
@@ -464,10 +469,27 @@ async def test_expense_and_cash_in_the_daily_summary(chat):
     calls_before = len(chat.models.calls)
     bilan = await chat.send(text="bilan")  # shortcut: no model call
     assert len(chat.models.calls) == calls_before
-    text_ = bilan[0].text
-    assert "Ventes : *33 000" in text_ and "à crédit 8 000" in text_
-    assert "En caisse : *21 500" in text_  # 25 000 cashed - 3 500 expense
-    assert "À encaisser : *8 000" in text_
+    assert bilan[0].image and bilan[0].text == "*Bilan du jour* · ventes 33 000 FCFA · en caisse 21 500 FCFA"
+    template, data = rendered[-1]
+    assert template == "bilan.html.j2" and data["title"] == "Bilan du jour"
+    assert (data["sales"], data["credit"], data["expenses"]) == (33_000, 8_000, 3_500)
+    assert data["cash_in_hand"] == 21_500  # 25 000 cashed - 3 500 expense
+    assert data["outstanding"] == 8_000 and data["debtors"][0]["name"] == "Ama Koudjo"
+
+
+async def test_summary_text_without_an_image_when_nothing_to_draw_or_render_fails(chat, monkeypatch):
+    empty = await chat.send(text="bilan")
+    assert empty[0].image is None and "Aucune opération notée" in empty[0].text
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])
+
+    async def broken(*_):
+        raise router.RenderError("no Chromium found")
+
+    monkeypatch.setattr(router, "render_png", broken)
+    fallback = await chat.send(text="bilan")
+    assert fallback[0].image is None
+    assert "Ventes : *33 000" in fallback[0].text and "À encaisser : *8 000" in fallback[0].text
 
 
 async def test_whos_in_debt_and_a_ready_reminder(chat, db):
@@ -580,8 +602,8 @@ async def test_evening_summary_and_supplier_reminder_are_sent(chat, db, monkeypa
         s.add(shop)
     chat.wa.sent = []
     await jobs.run_hourly(chat.svc)
+    assert any(m.image and m.text.startswith("*Bilan du jour*") for m in chat.wa.sent)
     texts = [m.text for m in chat.wa.sent]
-    assert any("Bilan du jour" in t and "8 000" in t.replace(" ", " ") for t in texts)
     assert any("Rappel fournisseurs" in t and "Koffi" in t for t in texts)
 
 
@@ -645,14 +667,14 @@ async def test_recent_turns_are_given_to_the_model(chat, models):
     assert {"role": "assistant", "content": "Bonjour ! Que puis-je noter ?"} in history
 
 
-async def test_a_summary_asked_with_operations_comes_after_the_yes(chat):
+async def test_a_summary_asked_with_operations_comes_after_the_yes(chat, rendered):
     expense = ("propose_expense", {"amount": 5_000, "label": "transport"})
     recap = await chat.say("transport 5 000 et fais-moi le bilan", [SALE, expense, ("summary", {"period": "today"})])
     assert len(recap) == 1 and "bilan suivra" in recap[0].text
     done = await chat.tap(recap[0].buttons[0][0])
-    assert (
-        "Bilan du jour" in done[-1].text and "Ventes : *33 000" in done[-1].text and "Sorties : 5 000" in done[-1].text
-    )
+    assert done[-1].image and done[-1].text.startswith("*Bilan du jour* · ventes 33 000")
+    template, data = rendered[-1]
+    assert template == "bilan.html.j2" and data["expenses"] == 5_000  # the summary includes what was just noted
 
 
 async def test_a_receipt_can_be_asked_again_with_the_same_number(chat):

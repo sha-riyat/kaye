@@ -10,7 +10,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from app.db.models import Entry, Shop
@@ -80,6 +80,59 @@ def receipt_data(shop: dict, entry: Entry, number: int, customer: str, when: dat
         "due": due,
         "code": f"KY-{number:04d}-{entry.id:X}",
     }
+
+
+DAYS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+MONTHS = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
+          "novembre", "décembre")  # fmt: skip
+SUMMARY_ROWS = 5  # debtors, supplier dues and low stock shown on the image; the text has the rest
+
+
+def long_date(d: datetime) -> str:
+    """vendredi 31 octobre 2026: the brand writes dates in words, not 2026-10-31."""
+    return f"{DAYS[d.weekday()]} {d.day} {MONTHS[d.month - 1]} {d.year}"
+
+
+def _day(d) -> str:
+    return f"{d:%d/%m}" if d else ""
+
+
+def summary_data(shop: dict, f, when: datetime) -> dict:
+    """The daily (or weekly...) summary ticket. `f` is app.agent.actions.Figures."""
+    p = f.period
+    one_day = f.end - f.start <= timedelta(days=1)
+    return {
+        "shop": shop,
+        "title": f"Bilan {f.label}",
+        "date_long": long_date(f.start) if one_day else f"du {f.start:%d/%m} au {f.end - timedelta(days=1):%d/%m/%Y}",
+        "time": f"{when:%H:%M}",
+        "operations": p.operations,
+        "sales": p.sales,
+        "cashed": p.cashed,
+        "credit": p.credit,
+        "mobile_money": p.mobile_money,
+        "repaid": p.repaid,
+        "expenses": p.expenses,
+        "supplier_paid": p.supplier_paid,
+        "cash_in_hand": p.cash_in_hand,
+        "debtors": [
+            {"name": d.contact.name, "due": d.balance, "since": _day(d.oldest_credit_at)}
+            for d in f.debtors[:SUMMARY_ROWS]
+        ],
+        "more_debtors": max(len(f.debtors) - SUMMARY_ROWS, 0),
+        "outstanding": f.owed,
+        "supplier_dues": [
+            {"name": s.contact.name, "due": s.balance, "date": _day(s.due_date)} for s in f.supplier_dues[:SUMMARY_ROWS]
+        ],
+        "low_stock": [{"name": pr.name, "stock": pr.stock} for pr in f.low_stock[:SUMMARY_ROWS]],
+    }
+
+
+def summary_extra_height(data: dict) -> int:
+    """Room for the optional sections; the image is cropped to the ticket, so too much is harmless."""
+    rows = len(data["debtors"]) + len(data["supplier_dues"]) + len(data["low_stock"])
+    sections = sum(1 for k in ("supplier_dues", "low_stock") if data[k])
+    return rows * 50 + sections * 90 + (60 if data["expenses"] or data["supplier_paid"] else 0)
 
 
 def _chromium() -> str:

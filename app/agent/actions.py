@@ -571,14 +571,55 @@ def period_bounds(period: str, now: datetime) -> tuple[datetime, datetime, str]:
 
 
 async def summary(ctx: Ctx, a: s.SummaryRequest) -> list[Reply]:
-    return [Reply(await summary_text(ctx.session, ctx.shop, a.period, ctx.now))]
+    """Drawn by the router as a ticket image (it needs the renderer and storage)."""
+    return [Reply(a.period, kind="bilan")]
+
+
+@dataclass
+class Figures:
+    """Everything a summary shows, for the text and the image alike."""
+
+    label: str  # "du jour", "d'hier", "des 7 derniers jours"...
+    start: datetime
+    end: datetime
+    period: ledger.Period
+    debtors: list[ledger.Debtor]
+    supplier_dues: list[ledger.SupplierDue]
+    low_stock: list
+
+    @property
+    def owed(self) -> int:
+        return sum(d.balance for d in self.debtors)
+
+    @property
+    def empty(self) -> bool:
+        return self.period.operations == 0 and not self.owed
+
+
+async def summary_figures(session: AsyncSession, shop: Shop, period: str, now: datetime | None = None) -> Figures:
+    start, end, label = period_bounds(period, now or queries.utcnow())
+    low = [pr for pr in await queries.tracked_products(session, shop.id) if (pr.stock or 0) <= LOW_STOCK]
+    return Figures(
+        label=label, start=start, end=end,
+        period=await ledger.period_summary(session, shop_id=shop.id, start=start, end=end),
+        debtors=await ledger.debtors(session, shop_id=shop.id),
+        supplier_dues=await ledger.supplier_dues(session, shop_id=shop.id),
+        low_stock=low,
+    )  # fmt: skip
+
+
+def summary_caption(f: Figures) -> str:
+    """One line under the image: the two figures a merchant looks for first."""
+    p = f.period
+    return f"*Bilan {f.label}* · ventes {money(p.sales)} FCFA · en caisse {money(p.cash_in_hand)} FCFA"
 
 
 async def summary_text(session: AsyncSession, shop: Shop, period: str, now: datetime | None = None) -> str:
-    start, end, label = period_bounds(period, now or queries.utcnow())
-    p = await ledger.period_summary(session, shop_id=shop.id, start=start, end=end)
-    debtors = await ledger.debtors(session, shop_id=shop.id)
-    owed = sum(d.balance for d in debtors)
+    return summary_text_of(await summary_figures(session, shop, period, now))
+
+
+def summary_text_of(f: Figures) -> str:
+    p, label, debtors, owed = f.period, f.label, f.debtors, f.owed
     out = [f"*Bilan {label}*"]
     if p.operations == 0:
         out.append("Aucune opération notée.")
@@ -596,9 +637,8 @@ async def summary_text(session: AsyncSession, shop: Shop, period: str, now: date
         out.append(f"En caisse : *{money(p.cash_in_hand)} FCFA*")
     if owed:
         out.append(f"\nÀ encaisser : *{money(owed)} FCFA* ({len(debtors)} client(s))")
-    low = [pr for pr in await queries.tracked_products(session, shop.id) if (pr.stock or 0) <= LOW_STOCK]
-    if low:
-        out.append("Stock bas : " + ", ".join(f"{pr.name} ({pr.stock})" for pr in low[:5]))
+    if f.low_stock:
+        out.append("Stock bas : " + ", ".join(f"{pr.name} ({pr.stock})" for pr in f.low_stock[:5]))
     return "\n".join(out)
 
 

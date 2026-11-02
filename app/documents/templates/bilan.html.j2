@@ -1,8 +1,8 @@
 {% extends "_ticket.html.j2" %}
-{% block kind %}Bilan du {{ date }}{% endblock %}
+{% block kind %}{{ title }}{% endblock %}
 {% block doc_h %}1750{% endblock %}
 {% block head_meta %}
-<div class="row"><span class="doc-kind">Bilan du jour</span><span class="label">{{ date_long }}</span></div>
+<div class="row"><span class="doc-kind">{{ title }}</span><span class="label">{{ date_long }}</span></div>
 <div class="row"><span class="label">Opérations notées</span><strong>{{ operations }}</strong></div>
 {% endblock %}
 {% block extra_css %}
@@ -12,26 +12,51 @@
 .kpi strong { font-family: var(--display); font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
 .kpi.green strong { color: var(--lagune); }
 .kpi.red strong { color: var(--laterite); }
-.debtors { display: flex; flex-direction: column; gap: 10px; font-size: 17px; }
-.debtors .row { font-size: 17px; }
+.list { display: flex; flex-direction: column; gap: 10px; }
+.list .row { font-size: 17px; }
 .section { font-size: 15px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 {% endblock %}
 {% block body %}
-<div class="total"><span class="label">Ventes du jour</span><span class="amount display">{{ sales | fcfa }} <small>FCFA</small></span></div>
+<div class="total"><span class="label">Ventes</span><span class="amount display">{{ sales | fcfa }} <small>FCFA</small></span></div>
 <div class="kpis">
   <div class="kpi green"><span>Encaissé</span><strong>{{ cashed | fcfa }}</strong></div>
   <div class="kpi red"><span>Vendu à crédit</span><strong>{{ credit | fcfa }}</strong></div>
   <div class="kpi"><span>dont mobile money</span><strong>{{ mobile_money | fcfa }}</strong></div>
   <div class="kpi green"><span>Dettes remboursées</span><strong>{{ repaid | fcfa }}</strong></div>
 </div>
+{% if expenses or supplier_paid %}
+<div class="row"><span class="label">Sorties{% if expenses and supplier_paid %} · dépenses {{ expenses | fcfa }}, fournisseurs {{ supplier_paid | fcfa }}{% endif %}</span><strong>{{ (expenses + supplier_paid) | fcfa }}</strong></div>
+{% endif %}
+<div class="band info"><span class="label">En caisse</span><span class="amount display">{{ cash_in_hand | fcfa }} FCFA</span></div>
+{% if debtors %}
 <div class="rule"></div>
 <span class="section">À relancer</span>
-<div class="debtors">
+<div class="list">
   {% for d in debtors %}
-  <div class="row"><span>{{ d.name }} <span class="label">· depuis {{ d.since }}</span></span><strong style="color:var(--laterite)">{{ d.due | fcfa }}</strong></div>
+  <div class="row"><span>{{ d.name }}{% if d.since %} <span class="label">· depuis {{ d.since }}</span>{% endif %}</span><strong style="color:var(--laterite)">{{ d.due | fcfa }}</strong></div>
   {% endfor %}
+  {% if more_debtors %}<div class="row"><span class="label">et {{ more_debtors }} autre{{ 's' if more_debtors > 1 }}</span></div>{% endif %}
 </div>
 <div class="band due"><span class="label">Reste à encaisser</span><span class="amount display">{{ outstanding | fcfa }} FCFA</span></div>
-<p class="note">Répondez « relance » pour préparer les messages de rappel.</p>
+<p class="note">Écrivez « qui me doit ? » pour préparer les rappels.</p>
+{% endif %}
+{% if supplier_dues %}
+<div class="rule"></div>
+<span class="section">À payer aux fournisseurs</span>
+<div class="list">
+  {% for s in supplier_dues %}
+  <div class="row"><span>{{ s.name }}{% if s.date %} <span class="label">· avant le {{ s.date }}</span>{% endif %}</span><strong>{{ s.due | fcfa }}</strong></div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if low_stock %}
+<div class="rule"></div>
+<span class="section">Stock bas</span>
+<div class="list">
+  {% for pr in low_stock %}
+  <div class="row"><span>{{ pr.name }}</span><strong style="color:var(--laterite)">{{ pr.stock }}</strong></div>
+  {% endfor %}
+</div>
+{% endif %}
 {% endblock %}
 {% block seal %}Bilan préparé par Kayé à {{ time }}{% endblock %}

@@ -8,8 +8,10 @@ import logging
 from datetime import timedelta
 
 from app.agent import actions
+from app.agent.reply import Reply
 from app.db import ledger, queries
 from app.db.models import AppUser, Shop
+from app.router import summary_reply
 from app.services import Services
 from app.whatsapp import WhatsAppError
 
@@ -41,9 +43,9 @@ async def _evening_summary(svc: Services, session, shop: Shop, owner: AppUser, n
     owed = sum(d.balance for d in await ledger.debtors(session, shop_id=shop.id))
     if today.operations == 0 and owed == 0:
         return
-    text = await actions.summary_text(session, shop, "today", now)
+    reply = await summary_reply(session, svc, shop, "today", now)
     short = f"ventes {actions.money(today.sales)} FCFA, à encaisser {actions.money(owed)} FCFA"
-    await _send(svc, owner.whatsapp_id, text, template_params=[shop.name, short])
+    await _send(svc, owner.whatsapp_id, reply, template_params=[shop.name, short])
 
 
 async def _supplier_reminders(svc: Services, session, shop: Shop, owner: AppUser, now) -> None:
@@ -55,12 +57,12 @@ async def _supplier_reminders(svc: Services, session, shop: Shop, owner: AppUser
     for d in due:
         when = "aujourd'hui" if d.due_date <= now.date() else "demain"
         lines.append(f"• {d.contact.name} : {actions.money(d.balance)} FCFA, à payer {when}")
-    await _send(svc, owner.whatsapp_id, "*Rappel fournisseurs*\n" + "\n".join(lines), template_params=None)
+    await _send(svc, owner.whatsapp_id, Reply("*Rappel fournisseurs*\n" + "\n".join(lines)), template_params=None)
 
 
-async def _send(svc: Services, to: str, text: str, template_params: list[str] | None) -> None:
+async def _send(svc: Services, to: str, reply: Reply, template_params: list[str] | None) -> None:
     try:
-        await svc.wa.send_text(to, text)
+        await svc.wa.deliver(to, reply)
     except WhatsAppError as exc:
         template = svc.settings.summary_template_name
         if REENGAGEMENT_ERROR in str(exc) and template and template_params:

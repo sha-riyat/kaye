@@ -16,7 +16,15 @@ from app.agent.reply import Reply
 from app.db import queries
 from app.db.models import Entry, EntrySource, Media, PendingStatus, Receipt, Shop
 from app.meta_media import logo_prompt
-from app.receipts import RenderError, extra_height, receipt_data, render_png, shop_card
+from app.receipts import (
+    RenderError,
+    extra_height,
+    receipt_data,
+    render_png,
+    shop_card,
+    summary_data,
+    summary_extra_height,
+)
 from app.services import Services
 from app.storage import media_key
 from app.transcribe import TranscriptionError
@@ -122,6 +130,8 @@ async def _process(session, svc: Services, msg: InboundMessage, text: str | None
     for r in replies:
         if r.kind == "receipt":
             expanded.append(await _receipt_reply(ctx, svc, int(r.text)))
+        elif r.kind == "bilan":
+            expanded.append(await summary_reply(ctx.session, svc, ctx.shop, r.text, ctx.now))
         elif r.kind == "logo":
             expanded += await _logo_proposals(ctx, svc)
         else:
@@ -327,21 +337,42 @@ async def _confirm(ctx: Ctx, svc: Services, pending) -> list[Reply]:
     replies = [Reply(_one_confirmation(texts)), *receipts]
     if pending.payload.get("then_summary"):
         await ctx.session.flush()
-        replies.append(Reply(await actions.summary_text(ctx.session, ctx.shop, "today", ctx.now)))
+        replies.append(await summary_reply(ctx.session, svc, ctx.shop, "today", ctx.now))
     return replies
+
+
+async def _shop_card(session, svc: Services, shop: Shop) -> dict:
+    """The header of every document: shop name, owner's number, logo if one was chosen."""
+    owner = await queries.owner_of(session, shop.id)
+    logo = None
+    if shop.logo_key and svc.storage is not None:
+        try:
+            logo = await svc.storage.get(shop.logo_key)
+        except Exception:
+            log.exception("logo unavailable")
+    return shop_card(shop, owner.whatsapp_id if owner else None, logo)
+
+
+async def summary_reply(session, svc: Services, shop: Shop, period: str, now) -> Reply:
+    """The summary as a ticket image with a one-line caption; the full text when there is nothing to
+    draw or the image cannot be made."""
+    figures = await actions.summary_figures(session, shop, period, now)
+    if figures.empty:
+        return Reply(actions.summary_text_of(figures))
+    try:
+        data = summary_data(await _shop_card(session, svc, shop), figures, now)
+        png = await render_png("bilan.html.j2", data, summary_extra_height(data))
+    except (RenderError, OSError):
+        log.exception("summary rendering failed for shop %s", shop.id)
+        return Reply(actions.summary_text_of(figures))
+    return Reply(actions.summary_caption(figures), image=png)
 
 
 async def _receipt_reply(ctx: Ctx, svc: Services, entry_id: int) -> Reply:
     """The receipt image for a sale. A rendering failure never undoes the sale."""
     entry = await ctx.session.get(Entry, entry_id)
     try:
-        owner = await queries.owner_of(ctx.session, ctx.shop.id)
-        logo = None
-        if ctx.shop.logo_key and svc.storage is not None:
-            try:
-                logo = await svc.storage.get(ctx.shop.logo_key)
-            except Exception:
-                log.exception("logo unavailable")
+        card = await _shop_card(ctx.session, svc, ctx.shop)
         existing = (await ctx.session.exec(select(Receipt).where(Receipt.entry_id == entry.id))).first()
         number = existing.number if existing else await queries.next_receipt_number(ctx.session, ctx.shop.id)
         customer = ""
@@ -350,9 +381,7 @@ async def _receipt_reply(ctx: Ctx, svc: Services, entry_id: int) -> Reply:
 
             contact = await ctx.session.get(Contact, entry.contact_id)
             customer = contact.name if contact else ""
-        data = receipt_data(
-            shop_card(ctx.shop, owner.whatsapp_id if owner else None, logo), entry, number, customer, ctx.now
-        )
+        data = receipt_data(card, entry, number, customer, ctx.now)
         png = await render_png("recu_ticket.html.j2", data, extra_height(len(entry.lines)))
         key = ""
         if svc.storage is not None:
