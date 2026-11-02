@@ -53,7 +53,10 @@ async def handle_message(msg: InboundMessage, svc: Services) -> None:
         except WhatsAppError as exc:
             log.warning("ignored blocked number %s; Meta block failed: %s", msg.sender, exc)
         return
-    await wa.mark_read(msg.wamid)
+    try:
+        await wa.mark_read(msg.wamid)
+    except WhatsAppError:
+        log.warning("could not mark %s as read", msg.wamid)  # the message still gets its answer
 
     text, source, media_bytes, mime, voice = msg.text, EntrySource.TEXT, None, "", None
     try:

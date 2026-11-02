@@ -8,14 +8,13 @@ active merchant-day and a 30-day projection. Transcription is logged per audio m
 """
 
 import argparse
-import asyncio
 from datetime import timedelta
 
 from sqlalchemy import func
 from sqlmodel import select
 
 from app.config import get_settings
-from app.db.engine import Database
+from app.db.engine import Database, run
 from app.db.models import ModelCall
 from app.db.queries import utcnow
 
@@ -61,4 +60,4 @@ async def main(days: int) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--days", type=int, default=30)
-    asyncio.run(main(parser.parse_args().days))
+    run(main(parser.parse_args().days))

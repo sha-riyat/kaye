@@ -1,6 +1,5 @@
 """Alembic environment: uses DATABASE_URL from settings and the app's engine (pooler-safe)."""
 
-import asyncio
 from logging.config import fileConfig
 
 from alembic import context
@@ -9,7 +8,7 @@ from sqlmodel import SQLModel
 
 import app.db.models  # noqa: F401  (registers the tables on SQLModel.metadata)
 from app.config import get_settings
-from app.db.engine import make_engine, sqlalchemy_url
+from app.db.engine import make_engine, run, sqlalchemy_url
 
 config = context.config
 if config.config_file_name is not None:
@@ -52,4 +51,4 @@ async def run_async_migrations() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    asyncio.run(run_async_migrations())
+    run(run_async_migrations())

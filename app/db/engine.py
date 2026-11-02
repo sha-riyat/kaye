@@ -5,8 +5,11 @@ statements must be off, and we let the pooler do the pooling (NullPool): Modal c
 short-lived and parallel.
 """
 
-from collections.abc import AsyncIterator
+import asyncio
+import sys
+from collections.abc import AsyncIterator, Coroutine
 from contextlib import asynccontextmanager
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -19,6 +22,14 @@ def sqlalchemy_url(database_url: str) -> str:
         if database_url.startswith(prefix):
             return "postgresql+psycopg://" + database_url.removeprefix(prefix)
     return database_url
+
+
+def run[T](main: Coroutine[Any, Any, T]) -> T:
+    """`asyncio.run` for scripts that use the database. Async psycopg cannot run on Windows' default
+    Proactor loop, so local runs on Windows get a selector loop (Modal is Linux, unaffected)."""
+    if sys.platform == "win32":
+        return asyncio.run(main, loop_factory=asyncio.SelectorEventLoop)
+    return asyncio.run(main)
 
 
 def make_engine(database_url: str) -> AsyncEngine:

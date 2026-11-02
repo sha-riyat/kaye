@@ -1,13 +1,18 @@
+import asyncio
 import hashlib
 import hmac
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from app.config import Settings
+
+if sys.platform == "win32":  # async psycopg cannot run on the default Proactor loop (see app.db.engine.run)
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 FIXTURES = Path(__file__).parent / "fixtures"
 APP_SECRET = "test-app-secret"
@@ -43,7 +48,7 @@ def voice_note_ogg(tmp_path_factory) -> bytes:
 
 def load_fixture(name: str) -> bytes:
     """Fixture bytes, re-serialized compactly the way Meta sends them."""
-    return json.dumps(json.loads((FIXTURES / name).read_text())).encode()
+    return json.dumps(json.loads((FIXTURES / name).read_text(encoding="utf-8"))).encode()
 
 
 def sign(body: bytes, secret: str = APP_SECRET) -> str:

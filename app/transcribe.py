@@ -7,6 +7,7 @@ The endpoint only accepts RIFF/WAV, mono 16-bit PCM at 16 or 24 kHz, so WhatsApp
 import asyncio
 import json
 import logging
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,17 +60,21 @@ async def to_wav(audio: bytes) -> bytes:
     with tempfile.TemporaryDirectory() as tmp:
         src, dst = Path(tmp) / "in", Path(tmp) / "out.wav"
         src.write_bytes(audio)
-        proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-i", str(src),
-            "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-map_metadata", "-1",
-            str(dst),
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.PIPE,
-        )  # fmt: skip
-        _, stderr = await proc.communicate()
+        # A thread rather than asyncio subprocesses, which the selector loop used on Windows lacks
+        try:
+            proc = await asyncio.to_thread(
+                subprocess.run,
+                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                 "-i", str(src),
+                 "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-map_metadata", "-1",
+                 str(dst)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )  # fmt: skip
+        except FileNotFoundError:
+            raise TranscriptionError("ffmpeg not installed") from None
         if proc.returncode != 0:
-            raise TranscriptionError(f"ffmpeg failed: {stderr.decode(errors='replace')[:300]}")
+            raise TranscriptionError(f"ffmpeg failed: {proc.stderr.decode(errors='replace')[:300]}")
         return dst.read_bytes()
 
 

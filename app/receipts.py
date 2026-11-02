@@ -8,6 +8,7 @@ import asyncio
 import base64
 import re
 import shutil
+import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -16,7 +17,14 @@ from app.db.models import Entry, Shop
 from app.documents.render import render
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets" / "brand"
-CHROMIUM = ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable")
+CHROMIUM = ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "chrome", "msedge")
+# Windows installs are rarely on PATH (local runs only: production is Debian on Modal)
+WINDOWS_BROWSERS = (
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+)
 
 
 class RenderError(Exception):
@@ -79,6 +87,9 @@ def _chromium() -> str:
         path = shutil.which(name)
         if path:
             return path
+    for path in WINDOWS_BROWSERS:
+        if Path(path).exists():
+            return path
     raise RenderError("no Chromium found")
 
 
@@ -92,18 +103,18 @@ async def render_png(template: str, data: dict, extra_height: int = 0) -> bytes:
     html = html.replace("</head>", BARE_CSS + "</head>", 1)
     with tempfile.TemporaryDirectory() as tmp:
         page, out = Path(tmp) / "doc.html", Path(tmp) / "doc.png"
-        page.write_text(html)
-        proc = await asyncio.create_subprocess_exec(
-            _chromium(), "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
-            "--allow-file-access-from-files", f"--window-size=1080,{height}", "--virtual-time-budget=8000",
-            "--default-background-color=00000000", f"--force-device-scale-factor={SCALE}",
-            f"--screenshot={out}", page.as_uri(),
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-        )  # fmt: skip
+        page.write_text(html, encoding="utf-8")
+        # A thread rather than asyncio subprocesses, which the selector loop used on Windows lacks
         try:
-            await asyncio.wait_for(proc.wait(), timeout=40)
-        except TimeoutError:
-            proc.kill()
+            await asyncio.to_thread(
+                subprocess.run,
+                [_chromium(), "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
+                 "--allow-file-access-from-files", f"--window-size=1080,{height}", "--virtual-time-budget=8000",
+                 "--default-background-color=00000000", f"--force-device-scale-factor={SCALE}",
+                 f"--screenshot={out}", page.as_uri()],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=40,
+            )  # fmt: skip
+        except subprocess.TimeoutExpired:
             raise RenderError("Chromium timed out") from None
         if not out.exists():
             raise RenderError("Chromium produced no image")

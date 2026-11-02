@@ -11,7 +11,6 @@ Judges can use it to try Kayé without a phone. Needs META_MODEL_API_KEY.
 """
 
 import argparse
-import asyncio
 import logging
 import sys
 from pathlib import Path
@@ -21,7 +20,7 @@ from sqlmodel import SQLModel
 from app.agent.loop import Agent
 from app.agent.reply import Reply
 from app.config import get_settings
-from app.db.engine import Database
+from app.db.engine import Database, run
 from app.meta_media import MetaMedia
 from app.models_client import ModelClient
 from app.router import handle_message
@@ -83,7 +82,7 @@ async def main(path: Path, db_url: str) -> None:
 
     await reset()
     n = 0
-    for raw in path.read_text().splitlines():
+    for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
@@ -124,5 +123,5 @@ if __name__ == "__main__":
     parser.add_argument("--db", required=True, help="scratch Postgres URL (it is wiped)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.WARNING)
-    asyncio.run(main(args.conversation, args.db))
+    run(main(args.conversation, args.db))
     sys.exit(0)
