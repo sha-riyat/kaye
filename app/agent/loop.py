@@ -4,10 +4,11 @@ import logging
 
 from app.agent import actions
 from app.agent.actions import Ctx
-from app.agent.prompts import VISION_PROMPT, system_prompt
+from app.agent.prompts import system_prompt, vision_prompt
 from app.agent.reply import Reply
 from app.agent.schemas import tool
 from app.db import queries
+from app.images import prepare_for_reading
 from app.models_client import ModelClient, image_part
 
 log = logging.getLogger(__name__)
@@ -20,7 +21,12 @@ TEXT_TOOLS = [
     for name, m in actions.TOOL_MODELS.items()
     if name not in ("notebook_page", "mobile_money_receipt", "shelf_photo")
 ]
-VISION_TOOLS = [tool(n, actions.TOOL_MODELS[n]) for n in ("notebook_page", "mobile_money_receipt", "shelf_photo")]
+VISION_TOOLS = [
+    tool(n, actions.TOOL_MODELS[n]) for n in ("notebook_page", "sales_register", "mobile_money_receipt", "shelf_photo")
+]
+# Handwriting gets a little reasoning: on a real register page, « low » with the cleaned photo read
+# every amount and the date, for about $0.005-0.01 a page (Muse Wonder took over 90 s: too slow).
+VISION_PARAMS = {"reasoning_effort": "low", "max_tokens": 4000}
 
 # Frequent questions are answered by rules, without paying for a model call.
 SHORTCUTS = {
@@ -62,15 +68,18 @@ class Agent:
         return await self._call(ctx, messages, TEXT_TOOLS)
 
     async def on_image(self, ctx: Ctx, data: bytes, mime: str, caption: str | None) -> list[Reply]:
-        ctx.image = (data, mime)
+        ctx.image = (data, mime)  # the original, in colour, for SAM
+        clean, clean_mime = prepare_for_reading(data)
         content = [
-            {"type": "text", "text": VISION_PROMPT + (f"\nLégende : {caption}" if caption else "")},
-            image_part(data, mime),
+            {"type": "text", "text": vision_prompt(ctx.now) + (f"\nLégende : {caption}" if caption else "")},
+            image_part(clean, clean_mime),
         ]
-        return await self._call(ctx, [{"role": "user", "content": content}], VISION_TOOLS)
+        return await self._call(ctx, [{"role": "user", "content": content}], VISION_TOOLS, VISION_PARAMS)
 
-    async def _call(self, ctx: Ctx, messages: list[dict], tools: list[dict]) -> list[Reply]:
-        response, usage = await self.models.chat(messages=messages, tools=tools, tool_choice="auto", **MODEL_PARAMS)
+    async def _call(
+        self, ctx: Ctx, messages: list[dict], tools: list[dict], params: dict = MODEL_PARAMS
+    ) -> list[Reply]:
+        response, usage = await self.models.chat(messages=messages, tools=tools, tool_choice="auto", **params)
         await queries.log_model_call(
             ctx.session, shop_id=ctx.shop.id, model=usage.model, tokens_in=usage.tokens_in,
             tokens_out=usage.tokens_out, cost_usd=usage.cost_usd,

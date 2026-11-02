@@ -141,6 +141,22 @@ class NotebookPage(BaseModel):
     lines: list[NotebookLine]
 
 
+class RegisterLine(BaseModel):
+    product: str = Field(description="What was sold, as written, e.g. 'boîte de tomate', '1L huile'")
+    quantity: int | None = Field(default=None, gt=0, description="Number of items if written, e.g. 2")
+    amount: int = Field(ge=0, description="Amount of the line in FCFA ('1.500F' = 1500, '5.00F' = 500)")
+    customer: str | None = Field(default=None, description="Customer or company name, only if written")
+    unclear: bool = Field(default=False, description="True if a word or the amount is hard to read")
+
+
+class SalesRegister(BaseModel):
+    """Sales of a day written in a register: what was sold and for how much, customer names only if written.
+    Also used to correct such a list after the merchant answers « Corriger »."""
+
+    date: str | None = Field(default=None, description="Date written on the page, ISO YYYY-MM-DD")
+    lines: list[RegisterLine]
+
+
 class MobileMoneyReceipt(BaseModel):
     """A mobile money payment received, read from a screenshot or SMS."""
 

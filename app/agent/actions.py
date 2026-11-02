@@ -7,7 +7,7 @@ Reads answer directly, with no second model call.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from urllib.parse import quote
 
 from pydantic import BaseModel, ValidationError
@@ -77,6 +77,7 @@ WRITE_TOOLS: dict[str, type[BaseModel]] = {
     "propose_correction": s.NoArgs,
     "add_seller": s.AddSeller,
     "notebook_page": s.NotebookPage,
+    "sales_register": s.SalesRegister,
     "mobile_money_receipt": s.MobileMoneyReceipt,
     "shelf_photo": s.ShelfPhoto,
 }
@@ -94,7 +95,7 @@ READ_TOOLS: dict[str, type[BaseModel]] = {
 }
 TOOL_MODELS = {**WRITE_TOOLS, **READ_TOOLS}
 
-SELLER_TOOLS = {"propose_sale", "stock_levels", "resend_receipt"}
+SELLER_TOOLS = {"propose_sale", "sales_register", "stock_levels", "resend_receipt"}
 SELLER_REFUSAL = "Cette demande est réservée au patron de la boutique. Vous pouvez noter vos ventes."
 
 REPHRASE = "Je n'ai pas bien compris. Pouvez-vous le redire plus simplement, avec le nom et le montant ?"
@@ -314,6 +315,23 @@ def describe(pending: PendingAction) -> str:
         )
     if kind == "correction":
         return f"*Annuler cette opération ?*\n{p['label']}\n\nElle sera annulée, sans rien effacer du cahier."
+    if kind == "register":
+        shown = p["lines"][:25]
+        rows = "\n".join(
+            f"{'❓ ' if ln['unclear'] else ''}{ln['product']}"
+            + (f" ({ln['customer']})" if ln.get("customer") else "")
+            + f" : {money(ln['amount'])}"
+            for ln in shown
+        )
+        more = f"\n… et {len(p['lines']) - len(shown)} autres" if len(p["lines"]) > len(shown) else ""
+        when = f" du {date.fromisoformat(p['day']):%d/%m}" if p.get("day") else ""
+        total = sum(ln["amount"] for ln in p["lines"])
+        flagged = sum(1 for ln in p["lines"] if ln["unclear"])
+        note = f"\n❓ {flagged} ligne(s) à vérifier : l'écriture n'était pas claire." if flagged else ""
+        return (
+            f"*J'ai lu {len(p['lines'])} vente(s){when} dans votre registre*\n{rows}{more}\n"
+            f"Total : *{money(total)} FCFA*{note}\n\nJe les note toutes ?"
+        )
     if kind == "import":
         shown = p["lines"][:25]
         rows = "\n".join(
@@ -465,6 +483,31 @@ async def notebook_page(ctx: Ctx, a: s.NotebookPage) -> list[Reply]:
     if not lines:
         return [Reply("Je n'ai trouvé aucune dette sur cette photo. Essayez avec une page plus nette, bien à plat.")]
     return await _propose(ctx, "import", {"lines": lines, "media_id": ctx.media_id})
+
+
+REGISTER_DAYS = 31  # a page older than a month is not dated from what is written on it
+
+
+def _register_day(written: str | None, now: datetime) -> str | None:
+    """The page's date if it is a plausible recent day, else None (the sales are dated today)."""
+    try:
+        day = date.fromisoformat(written) if written else None
+    except ValueError:
+        return None
+    if day and now.date() - timedelta(days=REGISTER_DAYS) <= day <= now.date():
+        return day.isoformat()
+    return None
+
+
+async def sales_register(ctx: Ctx, a: s.SalesRegister) -> list[Reply]:
+    """A day of sales written by hand: every line becomes a sale paid in cash once confirmed."""
+    lines = [ln.model_dump() for ln in a.lines if ln.amount > 0 and ln.product.strip()]
+    if len(lines) > 2 and lines[-1]["amount"] == sum(ln["amount"] for ln in lines[:-1]):
+        lines = lines[:-1]  # the page total, not a sale
+    if not lines:
+        return [Reply("Je n'ai trouvé aucune vente sur cette photo. Essayez avec la page bien à plat et éclairée.")]
+    payload = {"lines": lines, "day": _register_day(a.date, ctx.now), "media_id": ctx.media_id}
+    return await _propose(ctx, "register", payload)
 
 
 async def shelf_photo(ctx: Ctx, a: s.ShelfPhoto) -> list[Reply]:
@@ -759,6 +802,7 @@ HANDLERS = {
     "propose_correction": propose_correction,
     "add_seller": add_seller,
     "notebook_page": notebook_page,
+    "sales_register": sales_register,
     "mobile_money_receipt": mobile_money_receipt,
     "customer_balance": customer_balance,
     "list_debtors": list_debtors,
@@ -840,6 +884,8 @@ async def apply_pending(ctx: Ctx, pending: PendingAction) -> Applied:
             return Applied(Reply("C'est annulé. Rien n'a été effacé : l'opération reste visible dans l'historique."))
         if kind == "import":
             return await _apply_import(ctx, p)
+        if kind == "register":
+            return await _apply_register(ctx, p)
         if kind == "seller":
             ctx.session.add(AppUser(shop_id=sid, whatsapp_id=p["phone"], name=p.get("name"), role="seller"))
             who = p.get("name") or "Cette personne"
@@ -925,6 +971,36 @@ async def _apply_import(ctx: Ctx, p: dict) -> Applied:
             "Écrivez « qui me doit ? » pour les voir."
         )
     )
+
+
+async def _apply_register(ctx: Ctx, p: dict) -> Applied:
+    day = date.fromisoformat(p["day"]) if p.get("day") else None
+    when = datetime.combine(day, time(12), tzinfo=UTC) if day and day != ctx.now.date() else None
+    named: list[str] = []
+    for ln in p["lines"]:
+        quantity = ln.get("quantity") or 1
+        if ln["amount"] % quantity:
+            quantity = 1  # « 3 citrons 250 »: no whole unit price, keep the line as one sale of 250
+        contact = None
+        if ln.get("customer"):
+            matches = await queries.find_contacts(ctx.session, ctx.shop.id, ln["customer"], ContactKind.CUSTOMER)
+            contact = matches[0] if len(matches) == 1 else await queries.create_contact(
+                ctx.session, ctx.shop.id, ln["customer"]
+            )  # fmt: skip
+            named.append(contact.name)
+        await ledger.record_entry(
+            ctx.session, shop_id=ctx.shop.id, kind=EntryKind.SALE,
+            lines=[Line(ln["product"], quantity, None, ln["amount"] // quantity)], paid=ln["amount"],
+            contact_id=contact.id if contact else None, source=EntrySource.NOTEBOOK_PHOTO,
+            media_id=p.get("media_id"), note="registre", created_by=ctx.user.id, created_at=when,
+        )  # fmt: skip
+        await queries.lower_stock_if_tracked(ctx.session, ctx.shop.id, ln["product"], quantity)
+    total = sum(ln["amount"] for ln in p["lines"])
+    text = f"C'est noté : {len(p['lines'])} vente(s), {money(total)} FCFA au total"
+    text += f", comptées le {day:%d/%m}." if when else ". Écrivez « bilan » pour voir la journée."
+    if named:
+        text += f"\nPour un reçu, écrivez par exemple « reçu de {named[0]} »."
+    return Applied(Reply(text))
 
 
 # --- picking among ambiguous contacts ---

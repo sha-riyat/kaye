@@ -67,6 +67,7 @@ async def record_entry(
     due_date: date | None = None,
     note: str | None = None,
     created_by: int | None = None,
+    created_at: datetime | None = None,  # a sale written on an earlier page of the register
 ) -> Entry:
     lines = lines or []
     if lines:
@@ -96,6 +97,8 @@ async def record_entry(
         note=note,
         created_by=created_by,
     )
+    if created_at is not None:
+        entry.created_at = created_at
     session.add(entry)
     await session.flush()
     return entry

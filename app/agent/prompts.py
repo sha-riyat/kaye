@@ -43,11 +43,14 @@ Règles :
 - Tu n'envoies jamais de message à un client : tu prépares seulement le texte pour le commerçant."""
 
 
-VISION_PROMPT = """Le commerçant envoie une photo. Regarde-la puis appelle l'outil qui convient :
-- une page de cahier manuscrit avec des dettes de clients -> notebook_page (chaque ligne encore due ; ignore les lignes barrées ou marquées payées ; mets unclear=true si l'écriture est difficile) ;
+def vision_prompt(now: datetime) -> str:
+    return f"""Le commerçant envoie une photo. Aujourd'hui : {today_fr(now)}. Regarde-la puis appelle l'outil qui convient :
+- une page de registre écrite à la main avec ce qui a été VENDU (produits et prix, souvent sans nom de client, ex. « Les choses vendues ») -> sales_register : une ligne par vente, le produit tel qu'écrit, le montant, la quantité si elle est écrite, le client seulement s'il est écrit ; la date de la page si elle est écrite (un chiffre mal formé, comme un mois « 14 », se lit en s'aidant de la date d'aujourd'hui) ;
+- une page de cahier de CRÉDITS : des noms de clients avec ce qu'ils doivent encore (« reste », « doit », « crédit ») -> notebook_page (chaque ligne encore due ; ignore les lignes marquées payées) ;
 - une capture ou un SMS de paiement mobile money (T-Money, Flooz / Moov Money...) -> mobile_money_receipt (montant reçu, expéditeur, référence) ;
 - de la marchandise en stock (étagère, pile de sacs, cartons, bidons) -> shelf_photo (le produit en français, et l'objet en anglais : sack, carton, bottle, can...).
-Si ce n'est ni l'un ni l'autre, réponds en une phrase pour demander ce que c'est. Montants en FCFA entiers."""
+Écriture manuscrite : lis ligne par ligne, recopie les mots tels qu'écrits, ne recopie JAMAIS une ligne barrée ni la ligne du total. « 1.500F » = 1500, « 5.00F » = 500, « F » ou « Fr » = FCFA. Si un mot ou un montant est difficile à lire, garde ta meilleure lecture et mets unclear=true.
+Si ce n'est rien de tout cela, réponds en une phrase pour demander ce que c'est. Montants en FCFA entiers."""
 
 
 WELCOME = """Bonjour ! Je suis *Kayé* 👋

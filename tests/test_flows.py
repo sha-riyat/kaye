@@ -869,3 +869,49 @@ async def test_weekly_summary_has_a_bar_per_day_and_the_expenses(chat, rendered)
     assert template == "bilan.html.j2" and len(data["days"]) == 7
     assert data["days"][-1]["current"] and data["days"][-1]["value"] == 33_000
     assert data["expense_lines"] == [{"label": "transport", "amount": 3_500}]
+
+
+# --- handwritten sales register ---
+
+REGISTER = ("sales_register", {"date": None, "lines": [
+    {"product": "2 paquets d'allumette", "quantity": 2, "amount": 200},
+    {"product": "boîte de tomate", "amount": 350},
+    {"product": "Lait", "amount": 450, "unclear": True},
+    {"product": "Riz", "amount": 1_500, "customer": "Maquis Le Palmier"},
+    {"product": "Total", "amount": 2_500},  # the page total, not a sale
+]})  # fmt: skip
+
+
+async def test_a_register_page_becomes_cash_sales_after_one_yes(chat, db, rendered):
+    chat.models.say(REGISTER)
+    recap = await chat.send("image", media_id="R1")
+    text = recap[0].text
+    assert "J'ai lu 4 vente(s) dans votre registre" in text and "Total : *2 500 FCFA*" in text
+    assert "❓ Lait : 450" in text and "Riz (Maquis Le Palmier) : 1 500" in text
+    done = await chat.tap(recap[0].buttons[0][0])
+    assert "4 vente(s), 2 500 FCFA" in done[0].text and "reçu de Maquis Le Palmier" in done[0].text
+    async with db.session() as s:
+        entries = (await s.exec(select(Entry))).all()
+    assert len(entries) == 4 and all(e.debt_delta == 0 and e.source == "notebook_photo" for e in entries)
+    matches = [e for e in entries if e.lines[0]["product"] == "2 paquets d'allumette"]
+    assert matches[0].lines[0]["quantity"] == 2 and matches[0].lines[0]["unit_price"] == 100
+    assert await contact_named(db, "Maquis Le Palmier") is not None
+    assert chat.models.calls[-1]["reasoning_effort"] == "low"  # handwriting gets a little reasoning
+
+
+async def test_a_register_page_is_dated_from_what_is_written(chat, db):
+    from datetime import UTC, datetime, timedelta
+
+    yesterday = (datetime.now(UTC) - timedelta(days=1)).date()
+    name, args = REGISTER
+    chat.models.say((name, {**args, "date": yesterday.isoformat(), "lines": args["lines"][:2]}))
+    recap = await chat.send("image", media_id="R2")
+    assert f"vente(s) du {yesterday:%d/%m}" in recap[0].text
+    done = await chat.tap(recap[0].buttons[0][0])
+    assert f"comptées le {yesterday:%d/%m}" in done[0].text
+    async with db.session() as s:
+        assert {e.created_at.date() for e in (await s.exec(select(Entry))).all()} == {yesterday}
+    old = ("sales_register", {"date": "2020-01-02", "lines": args["lines"][:1]})
+    chat.models.say(old)
+    recap = await chat.send("image", media_id="R3")
+    assert "vente(s) dans" in recap[0].text  # a far-off date is not trusted: counted today
