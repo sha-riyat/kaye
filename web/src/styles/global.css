@@ -1,0 +1,149 @@
+/* Kayé web: the brand book as Tailwind tokens.
+   Colours keep one meaning everywhere: Latérite is what is still due, Lagune what is paid,
+   Solaire what calls for action. Nuit and Cauri carry the brand. */
+@import "tailwindcss";
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/inter";
+
+@font-face {
+  font-family: "Caveat";
+  src: url("../assets/fonts/Caveat.ttf") format("truetype");
+  font-display: swap;
+}
+
+@theme {
+  --color-nuit: #14111b;
+  --color-nuit-2: #241f30; /* raised surface on Nuit */
+  --color-nuit-line: #3a3348;
+  --color-cauri: #f5e9d6;
+  --color-papier: #fffdf8;
+  --color-solaire: #ff7a1f;
+  --color-solaire-soft: #ffe7c4;
+  --color-laterite: #b84a1e;
+  --color-lagune: #17705f;
+  --color-gris: #5e5568;
+  --color-gris-clair: #a79fb4;
+  --color-lilas: #d8cee4; /* body text on Nuit */
+  --color-trait: #d6c8ae;
+  --color-sable: #e9dcc6;
+
+  --font-display: "Bricolage Grotesque Variable", "Inter Variable", system-ui, sans-serif;
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-hand: "Caveat", "Bricolage Grotesque Variable", cursive;
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  --shadow-warm: 0 12px 24px rgba(20, 17, 27, 0.08), 0 40px 60px rgba(20, 17, 27, 0.1);
+  --shadow-lift: 0 24px 50px rgba(20, 17, 27, 0.28);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    margin: 0;
+    background: var(--color-cauri);
+    color: var(--color-nuit);
+    font-family: var(--font-sans);
+  }
+  /* Amounts read at a glance: tabular figures everywhere (brand book, « Chiffres et montants »). */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-solaire);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .display {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.045em;
+    line-height: 0.92;
+  }
+  .eyebrow {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  /* A word underlined by the sun: the marker stroke of the brand. */
+  .marker {
+    background: linear-gradient(transparent 58%, var(--color-solaire) 58%, var(--color-solaire) 92%, transparent 92%);
+    padding: 0 0.06em;
+    box-decoration-break: clone;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-height: 3rem;
+    padding: 0 1.5rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 1.0625rem;
+    text-decoration: none;
+    transition: transform 160ms var(--ease-out), background-color 160ms ease;
+  }
+  .btn:active {
+    transform: scale(0.98);
+  }
+  .btn-sun {
+    background: var(--color-solaire);
+    color: var(--color-nuit);
+  }
+  .btn-sun:hover {
+    background: #ff8a3a;
+  }
+  .btn-night {
+    background: var(--color-nuit);
+    color: var(--color-cauri);
+  }
+  .btn-ghost {
+    border: 2px solid currentColor;
+    opacity: 0.9;
+  }
+  .kente {
+    background-image: url("../assets/brand/pattern-kente.svg");
+    background-size: 700px auto;
+    background-position: 0 -120px;
+    background-repeat: repeat-x;
+  }
+}
+
+/* ---------- Motion (after harnes): transform and opacity only, one easing, < 300 ms for what the
+   eye follows, a slow breath for what waits, and nothing at all under reduced motion. ---------- */
+@keyframes k-rise { from { opacity: 0; transform: translateY(8px) scale(0.99); } to { opacity: 1; transform: none; } }
+@keyframes k-pop { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+@keyframes k-draw { to { stroke-dashoffset: 0; } }
+@keyframes k-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes k-breathe { 50% { opacity: 0.35; } }
+@keyframes k-dot { 0%, 60%, 100% { opacity: 0.25; transform: none; } 30% { opacity: 1; transform: translateY(-2px); } }
+@keyframes k-wave { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+@keyframes k-ring { 0% { opacity: 0.55; transform: scale(1); } 60%, 100% { opacity: 0; transform: scale(2.4); } }
+@keyframes k-float { 50% { transform: translateY(-6px); } }
+
+.k-rise { animation: k-rise 260ms var(--ease-out) both; }
+.k-pop { animation: k-pop 220ms var(--ease-spring) both; }
+.k-draw { stroke-dasharray: var(--len, 24); stroke-dashoffset: var(--len, 24); animation: k-draw var(--dur, 280ms) var(--ease-out) forwards; }
+.k-reveal { animation: k-reveal calc(var(--n, 20) * 26ms) steps(var(--n, 20), end) both; }
+.k-breathe { animation: k-breathe 1.6s ease-in-out infinite; }
+.k-typing i { display: inline-block; width: 5px; height: 5px; margin-right: 3px; border-radius: 50%; background: currentColor; animation: k-dot 1.1s ease-in-out infinite; }
+.k-typing i:nth-child(2) { animation-delay: 0.15s; }
+.k-typing i:nth-child(3) { animation-delay: 0.3s; }
+.k-wave span { display: inline-block; width: 3px; border-radius: 2px; background: currentColor; transform-origin: center; animation: k-wave 900ms ease-in-out infinite; }
+.k-ring { position: relative; }
+.k-ring::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: currentColor; animation: k-ring 2.8s ease-out infinite; }
+.k-float { animation: k-float 5s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .k-rise, .k-pop, .k-reveal, .k-float { animation: none; clip-path: none; }
+  .k-draw { animation: none; stroke-dashoffset: 0; }
+  .k-breathe, .k-typing i, .k-wave span, .k-ring::after { animation: none; }
+}

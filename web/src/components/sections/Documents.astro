@@ -1,0 +1,42 @@
+---
+/** « Les bons papiers » : the ticket family, real renders from the app's templates, fanned out. */
+import { Image } from "astro:assets";
+import recu from "../../assets/tickets/recu.png";
+import bilanSemaine from "../../assets/tickets/bilan-semaine.png";
+import stock from "../../assets/tickets/stock.png";
+import quittance from "../../assets/tickets/quittance.png";
+import rappel from "../../assets/tickets/rappel.png";
+
+const tickets = [
+  { src: recu, alt: "Un reçu de vente", label: "Le reçu", tilt: "-rotate-[5deg]", top: "top-16" },
+  { src: rappel, alt: "Un rappel de dette poli", label: "Le rappel", tilt: "-rotate-[2deg]", top: "top-6" },
+  { src: bilanSemaine, alt: "Le bilan de la semaine avec une barre par jour", label: "Le bilan", tilt: "rotate-0", top: "top-0" },
+  { src: stock, alt: "L'état du stock avec les jours restants", label: "Le stock", tilt: "rotate-[2deg]", top: "top-6" },
+  { src: quittance, alt: "Une quittance tamponnée soldé", label: "La quittance", tilt: "rotate-[5deg]", top: "top-16" },
+];
+---
+
+<section id="documents" class="overflow-hidden bg-nuit text-cauri">
+  <div class="mx-auto flex max-w-[1200px] flex-col gap-12 px-6 pt-24 @5xl:pt-32">
+    <div class="flex flex-col gap-5 @5xl:flex-row @5xl:items-end @5xl:justify-between">
+      <h2 class="display m-0 max-w-[40rem] text-[clamp(2.5rem,6cqi,4.5rem)]">Les bons papiers, <span class="text-solaire">au bon moment.</span></h2>
+      <p class="m-0 max-w-[30rem] text-[1.125rem] leading-relaxed text-lilas">
+        Chaque document a la forme d'un ticket : votre nom et votre logo en haut, un petit sceau Kayé en bas.
+        Envoyé en image dans WhatsApp, prêt à transférer à votre client.
+      </p>
+    </div>
+  </div>
+  <div class="relative mx-auto mt-14 h-[560px] max-w-[1320px]">
+    <ul class="m-0 flex list-none justify-center p-0">
+      {tickets.map((t, i) => (
+        <li class:list={["relative -mx-6 w-[250px] shrink-0 @5xl:-mx-3", t.top, i >= 3 ? "hidden @3xl:block" : ""]}>
+          <figure class:list={["m-0", t.tilt]}>
+            <Image src={t.src} alt={t.alt} width={320} class="w-full rounded-md shadow-lift" />
+            <figcaption class="eyebrow mt-4 text-center text-gris-clair">{t.label}</figcaption>
+          </figure>
+        </li>
+      ))}
+    </ul>
+    <div class="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-nuit to-transparent" aria-hidden="true"></div>
+  </div>
+</section>

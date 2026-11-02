@@ -1,0 +1,53 @@
+---
+/** Hero C · « Du cahier à WhatsApp » : the story in one row. The register page is read line by
+ * line, Kayé answers with one recap, the evening summary comes out as a ticket. */
+import { Image } from "astro:assets";
+import Nav from "../../components/Nav.astro";
+import ChatDemo from "../../components/ChatDemo.astro";
+import RegisterPage from "../../components/RegisterPage.astro";
+import bilan from "../../assets/tickets/bilan.png";
+import { WHATSAPP } from "../../site";
+---
+
+<section class="relative overflow-hidden bg-papier text-nuit">
+  <Nav tone="cauri" />
+  <div class="mx-auto max-w-[1200px] px-6 pt-10 pb-20 @5xl:pt-14">
+    <div class="grid gap-8 @5xl:grid-cols-[1.2fr_1fr] @5xl:items-end">
+      <h1 class="display m-0 text-[clamp(3rem,8cqi,6.2rem)]">
+        Votre cahier,<br />dans <span class="marker">WhatsApp.</span>
+      </h1>
+      <div class="flex flex-col gap-6 @5xl:pb-3">
+        <p class="m-0 text-[1.1875rem] leading-relaxed text-gris">
+          Photographiez la page du jour ou envoyez un vocal. Kayé recopie, vous validez d'un « Oui », et le
+          soir le bilan arrive tout seul. Pas d'écran à apprendre, pas d'ordinateur.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <a href={WHATSAPP} class="btn btn-sun">Commencer sur WhatsApp</a>
+          <a href="#comment" class="btn btn-ghost">Voir comment</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="relative mt-16 flex flex-col items-center gap-10 @5xl:flex-row @5xl:items-center @5xl:justify-between @5xl:gap-4">
+      <div class="flex flex-col items-center gap-3">
+        <RegisterPage />
+        <span class="eyebrow text-gris">1 · La page du jour</span>
+      </div>
+      <svg class="hidden w-20 shrink-0 text-solaire @5xl:block" viewBox="0 0 80 24" aria-hidden="true">
+        <path d="M2 12 H70 M60 3 L72 12 L60 21" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <div class="flex flex-col items-center gap-3">
+        <ChatDemo scenario="cahier" width={270} />
+        <span class="eyebrow text-gris">2 · Un « Oui »</span>
+      </div>
+      <svg class="hidden w-20 shrink-0 text-solaire @5xl:block" viewBox="0 0 80 24" aria-hidden="true">
+        <path d="M2 12 H70 M60 3 L72 12 L60 21" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <div class="flex flex-col items-center gap-3">
+        <Image src={bilan} alt="Le bilan du jour, envoyé en image le soir" width={300} class="w-[250px] rotate-[2.5deg] rounded-md shadow-warm" />
+        <span class="eyebrow text-gris">3 · Le bilan du soir</span>
+      </div>
+    </div>
+  </div>
+  <div class="kente h-[22px]" aria-hidden="true"></div>
+</section>

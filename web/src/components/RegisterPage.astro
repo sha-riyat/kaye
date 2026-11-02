@@ -1,0 +1,105 @@
+---
+/** A page of a sales register, written by hand, read line by line: each line lights up in turn
+ * and gets its mark, a check or a ❓ for the one Kayé is unsure of. Loops while on screen. */
+interface Props {
+  class?: string;
+}
+const { class: cls = "" } = Astro.props;
+const lines = [
+  { t: "2 paquets d'allumette", a: "200F" },
+  { t: "un savon", a: "250F" },
+  { t: "boîte de tomate", a: "350F" },
+  { t: "boîte de sardine", a: "500F" },
+  { t: "Spaghetti", a: "350F" },
+  { t: "Lait", a: "750F", unsure: true },
+  { t: "Riz", a: "1.500F" },
+  { t: "1L huile", a: "1.200F" },
+  { t: "Cube Maggi", a: "100F" },
+  { t: "Citron", a: "100F" },
+];
+---
+
+<figure class:list={["register m-0", cls]} data-register aria-label="Une page de registre des ventes, écrite à la main">
+  <div class="sheet">
+    <p class="title">Aujourd'hui 02-11-2026<br /><u>Les choses vendues</u></p>
+    <ol>
+      {lines.map((l, i) => (
+        <li data-line={i} data-unsure={l.unsure ? "" : undefined}>
+          <span class="t">{l.t}</span><span class="arrow">→</span><span class="a">{l.a}</span>
+          <span class="mark" aria-hidden="true">{l.unsure ? "?" : "✓"}</span>
+        </li>
+      ))}
+    </ol>
+  </div>
+</figure>
+
+<style>
+  .register { transform: rotate(-2.2deg); }
+  .sheet {
+    position: relative;
+    width: min(360px, 100%);
+    box-sizing: border-box;
+    padding: 26px 20px 30px 54px;
+    border-radius: 6px;
+    background:
+      linear-gradient(90deg, transparent 40px, #e8807d 40px 42px, transparent 42px),
+      repeating-linear-gradient(#fffdf8 0 29px, #b9c8e6 29px 30px);
+    box-shadow: var(--shadow-warm);
+    font-family: var(--font-hand);
+    color: #23308a;
+  }
+  .title { margin: 0 0 6px; font-size: 22px; line-height: 30px; color: #c2383c; text-align: center; }
+  ol { list-style: none; margin: 0; padding: 0; }
+  li {
+    position: relative; display: flex; gap: 8px; align-items: baseline;
+    font-size: 23px; line-height: 30px; padding: 0 6px; border-radius: 4px;
+    transition: background-color 220ms ease;
+  }
+  .t { flex: 1; }
+  .arrow { opacity: 0.7; }
+  .a { min-width: 70px; text-align: right; }
+  .mark {
+    position: absolute; left: -34px; top: 5px; width: 22px; height: 22px; border-radius: 50%;
+    display: grid; place-items: center; font: 700 13px/1 var(--font-sans);
+    background: var(--color-lagune); color: var(--color-papier); opacity: 0; transform: scale(0.6);
+    transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-spring);
+  }
+  li[data-unsure] .mark { background: var(--color-laterite); }
+  li[data-reading] { background: rgba(255, 122, 31, 0.22); }
+  li[data-read] .mark { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    li .mark { opacity: 1; transform: none; transition: none; }
+  }
+</style>
+
+<script>
+  // Read one line every 420 ms, hold the result, then start again. Only while on screen.
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  for (const page of document.querySelectorAll<HTMLElement>("[data-register]")) {
+    if (reduce) continue;
+    const lines = [...page.querySelectorAll<HTMLElement>("li")];
+    let timer = 0;
+    let i = 0;
+    const tick = () => {
+      if (i < lines.length) {
+        lines[i - 1]?.removeAttribute("data-reading");
+        lines[i - 1]?.setAttribute("data-read", "");
+        lines[i]?.setAttribute("data-reading", "");
+        i += 1;
+        timer = window.setTimeout(tick, 420);
+      } else {
+        lines[i - 1]?.removeAttribute("data-reading");
+        lines[i - 1]?.setAttribute("data-read", "");
+        timer = window.setTimeout(() => {
+          lines.forEach((l) => l.removeAttribute("data-read"));
+          i = 0;
+          tick();
+        }, 3600);
+      }
+    };
+    new IntersectionObserver(([e]) => {
+      clearTimeout(timer);
+      if (e.isIntersecting) tick();
+    }).observe(page);
+  }
+</script>

@@ -1,0 +1,33 @@
+---
+/** The page shell: language, metadata, fonts and brand tokens. The body is one size container,
+ * so sections lay out the same way here and in the design canvas frames. */
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description: string;
+  lang?: "fr" | "en";
+}
+const { title, description, lang = "fr" } = Astro.props;
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#14111B" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icon-640.png" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+  </head>
+  <body>
+    <div class="@container">
+      <slot />
+    </div>
+  </body>
+</html>

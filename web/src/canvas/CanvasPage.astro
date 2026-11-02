@@ -1,0 +1,54 @@
+---
+/** The design canvas (dev only, see astro.config.mjs): every registry item rendered live, at its
+ * own width, in a frame that is its own size container so the responsive layout follows the frame. */
+import "../styles/global.css";
+import "./canvas.css";
+import { ITEMS } from "./registry";
+---
+
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Kayé · canevas du site</title>
+  </head>
+  <body class="canvas-body">
+    <main id="viewport" tabindex="0" aria-label="Canevas du site Kayé. Glisser le fond pour se déplacer, Ctrl + molette pour zoomer, flèches pour se déplacer au clavier.">
+      <div id="world">
+        {ITEMS.map((item) => {
+          const Component = item.component as any;
+          return (
+            <section class="item" data-id={item.id} data-name={item.name} data-w={item.w} data-h={item.h} data-x={item.x} data-y={item.y} aria-label={item.name}>
+              <div class="item-header">
+                <button type="button" class="item-handle" aria-label={`Déplacer ${item.name}. Flèches pour déplacer, Maj pour aller plus vite.`} title="Glisser pour déplacer">
+                  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><g fill="currentColor"><circle cx="4" cy="3" r="1.3" /><circle cx="10" cy="3" r="1.3" /><circle cx="4" cy="7" r="1.3" /><circle cx="10" cy="7" r="1.3" /><circle cx="4" cy="11" r="1.3" /><circle cx="10" cy="11" r="1.3" /></g></svg>
+                </button>
+                <button type="button" class="item-label" title="Cliquer pour copier le nom">{item.name}</button>
+                <span class="item-status" aria-live="polite"></span>
+              </div>
+              <div class="item-preview @container" style={`width:${item.w}px;height:${item.h}px`}>
+                <Component />
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </main>
+    <nav class="controls" aria-label="Caméra">
+      <button type="button" id="zoom-out" aria-label="Dézoomer">−</button>
+      <output id="zoom-level">100 %</output>
+      <button type="button" id="zoom-in" aria-label="Zoomer">+</button>
+      <button type="button" id="fit">Tout voir</button>
+      <button type="button" id="reset">Réinitialiser</button>
+    </nav>
+    <div id="fallback" class="fallback" hidden>
+      <label for="fallback-text">Copie impossible, sélectionnez le nom :</label>
+      <input id="fallback-text" readonly />
+      <button type="button" id="fallback-close">Fermer</button>
+    </div>
+    <div id="announce" class="sr-only" aria-live="polite"></div>
+    <script src="./canvas.ts"></script>
+  </body>
+</html>

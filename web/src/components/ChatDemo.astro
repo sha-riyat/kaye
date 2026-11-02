@@ -1,0 +1,228 @@
+---
+/**
+ * A conversation with Kayé that plays itself: the merchant's message, Kayé thinking, the recap
+ * with its three buttons, the tap on « Oui », the confirmation, then the receipt.
+ * Pure HTML and CSS; a small script reveals the steps in time, only while the phone is on screen,
+ * and loops. Under reduced motion every step is shown at once.
+ */
+import { Image } from "astro:assets";
+import receipt from "../assets/tickets/recu.png";
+import symbol from "../assets/brand/symbol-solaire.svg";
+
+interface Props {
+  scenario?: "vente" | "cahier";
+  class?: string;
+  /** Phone width in px; the height follows. */
+  width?: number;
+}
+const { scenario = "vente", class: cls = "", width = 340 } = Astro.props;
+
+type Step =
+  | { kind: "voice"; at: number; seconds: string }
+  | { kind: "photo"; at: number; caption: string }
+  | { kind: "typing"; at: number; until: number }
+  | { kind: "recap"; at: number; title: string; lines: string[]; total: string; due?: string; ask: string }
+  | { kind: "tap"; at: number; until: number }
+  | { kind: "text"; at: number; text: string }
+  | { kind: "receipt"; at: number; caption: string };
+
+const scripts: Record<string, Step[]> = {
+  vente: [
+    { kind: "voice", at: 400, seconds: "0:12" },
+    { kind: "typing", at: 1500, until: 2900 },
+    {
+      kind: "recap", at: 2900, title: "Vente à Ama Koudjo",
+      lines: ["3 sacs riz × 11 000 = 33 000", "Payé : 25 000"], total: "33 000", due: "8 000", ask: "Je note ?",
+    },
+    { kind: "tap", at: 4700, until: 5500 },
+    { kind: "text", at: 5300, text: "C'est noté. ✅ Ama Koudjo vous doit 8 000 FCFA." },
+    { kind: "receipt", at: 6300, caption: "Reçu n° 0042 pour Ama Koudjo. Transférez-le ↗" },
+  ],
+  cahier: [
+    { kind: "photo", at: 400, caption: "Les ventes d'aujourd'hui" },
+    { kind: "typing", at: 1500, until: 3100 },
+    {
+      kind: "recap", at: 3100, title: "J'ai lu 15 ventes du 02/11",
+      lines: ["Riz : 1 500", "1 L huile : 1 200", "❓ Lait : 450"], total: "7 150", ask: "Je les note toutes ?",
+    },
+    { kind: "tap", at: 4900, until: 5700 },
+    { kind: "text", at: 5500, text: "C'est noté : 15 ventes, 7 150 FCFA. Écrivez « bilan » pour voir la journée." },
+  ],
+};
+const steps = scripts[scenario];
+const end = Math.max(...steps.map((s) => s.at)) + 4200;
+---
+
+<div class:list={["chat-phone", cls]} style={`--w:${width}px`} data-chat data-end={end}>
+  <div class="chat-screen">
+    <header class="chat-head">
+      <span class="chat-avatar"><img src={symbol.src} alt="" width="22" height="22" /></span>
+      <span class="chat-who"><b>Kayé</b><small>en ligne</small></span>
+    </header>
+    <ol class="chat-body" aria-label="Exemple de conversation avec Kayé">
+      {steps.map((s) => (
+        <li class="chat-step" data-at={s.at} data-until={"until" in s ? s.until : undefined}>
+          {s.kind === "voice" && (
+            <div class="bubble out voice">
+              <span class="play" aria-hidden="true">▶</span>
+              <span class="k-wave wave" aria-hidden="true">
+                {[8, 14, 10, 18, 12, 20, 9, 15, 11, 17, 8, 13, 19, 10, 14].map((h, i) => (
+                  <span style={`height:${h}px;animation-delay:${i * 60}ms`} />
+                ))}
+              </span>
+              <span class="num dur">{s.seconds}</span>
+              <span class="sr-only">Note vocale : « J'ai vendu 3 sacs de riz à Ama, elle me doit 8 000 »</span>
+            </div>
+          )}
+          {s.kind === "photo" && (
+            <div class="bubble out photo">
+              <span class="page" aria-hidden="true">
+                <span>Riz → 1.500F</span><span>1L huile → 1.200F</span><span>Lait → 750F</span><span>Citron → 100F</span>
+              </span>
+              <span class="cap">{s.caption}</span>
+            </div>
+          )}
+          {s.kind === "typing" && (
+            <div class="bubble in typing k-typing" aria-label="Kayé écrit"><i></i><i></i><i></i></div>
+          )}
+          {s.kind === "recap" && (
+            <div class="bubble in recap">
+              <b>{s.title}</b>
+              {s.lines.map((l) => <span class="num">{l}</span>)}
+              <span>Total : <b class="num">{s.total} FCFA</b></span>
+              {s.due && <span class="due">Reste dû : <b class="num">{s.due}</b></span>}
+              <span class="ask">{s.ask}</span>
+              <span class="btns">
+                <span class="b yes">Oui, noter</span><span class="b">Corriger</span><span class="b">Annuler</span>
+              </span>
+            </div>
+          )}
+          {s.kind === "tap" && <span class="tap k-ring" aria-hidden="true"></span>}
+          {s.kind === "text" && <div class="bubble in">{s.text}</div>}
+          {s.kind === "receipt" && (
+            <div class="bubble in receipt">
+              <Image src={receipt} alt="Reçu de vente au nom de la boutique" width={220} class="ticket" />
+              <span>{s.caption}</span>
+            </div>
+          )}
+        </li>
+      ))}
+    </ol>
+  </div>
+</div>
+
+<style>
+  .chat-phone {
+    width: var(--w);
+    aspect-ratio: 9 / 18.5;
+    padding: 10px;
+    border-radius: calc(var(--w) * 0.14);
+    background: var(--color-nuit);
+    box-shadow: var(--shadow-lift), inset 0 0 0 1.5px var(--color-nuit-line);
+    flex-shrink: 0;
+  }
+  .chat-screen {
+    height: 100%;
+    border-radius: calc(var(--w) * 0.11);
+    background: #efe4d1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .chat-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 30px 16px 12px;
+    background: var(--color-nuit);
+    color: var(--color-cauri);
+  }
+  .chat-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--color-nuit-2); display: grid; place-items: center;
+  }
+  .chat-who { display: flex; flex-direction: column; line-height: 1.2; }
+  .chat-who b { font-size: 15px; }
+  .chat-who small { font-size: 11px; color: var(--color-gris-clair); }
+  .chat-body {
+    list-style: none; margin: 0; padding: 14px 12px;
+    flex: 1; display: flex; flex-direction: column; gap: 8px; justify-content: flex-end;
+    overflow: hidden; font-size: 13px; line-height: 1.38;
+  }
+  .chat-step { display: none; position: relative; }
+  .chat-step[data-on] { display: block; animation: k-rise 260ms var(--ease-out) both; }
+  .bubble {
+    max-width: 84%; padding: 8px 10px; border-radius: 12px;
+    box-shadow: 0 1px 0 rgba(20, 17, 27, 0.08);
+  }
+  .bubble.in { background: var(--color-papier); color: var(--color-nuit); border-top-left-radius: 4px; }
+  .bubble.out { margin-left: auto; background: #ffd9b8; color: var(--color-nuit); border-top-right-radius: 4px; }
+  .voice { display: flex; align-items: center; gap: 8px; width: 78%; }
+  .play { font-size: 11px; color: var(--color-laterite); }
+  .wave { display: inline-flex; align-items: center; gap: 2px; height: 22px; color: var(--color-nuit); flex: 1; }
+  .dur { font-size: 11px; color: var(--color-gris); }
+  .photo { padding: 5px; width: 70%; }
+  .page {
+    display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 8px;
+    background: repeating-linear-gradient(#fffdf8 0 17px, #c9d7ee 17px 18px);
+    font-family: var(--font-hand); font-size: 17px; color: #2a3a8c; transform: rotate(-1.2deg);
+  }
+  .cap { display: block; padding: 5px 5px 2px; font-size: 12px; }
+  .typing { display: inline-flex; color: var(--color-gris); padding: 11px 12px; }
+  .recap { display: flex; flex-direction: column; gap: 2px; }
+  .recap .due { color: var(--color-laterite); }
+  .recap .ask { margin-top: 4px; }
+  .btns { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+  .b {
+    display: block; text-align: center; padding: 6px; border-radius: 8px;
+    border-top: 1px solid var(--color-sable); color: var(--color-lagune); font-weight: 600;
+  }
+  .b.yes { background: transparent; }
+  .chat-step:has(.tap)[data-on] { display: block; height: 0; }
+  .tap {
+    position: absolute; left: 22%; top: -118px; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--color-solaire); color: var(--color-solaire); opacity: 0.85;
+  }
+  .receipt { padding: 5px; }
+  .receipt .ticket { display: block; width: 100%; height: auto; border-radius: 6px; }
+  .receipt span { display: block; padding: 5px 5px 2px; font-size: 12px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) {
+    .chat-step { display: block; }
+    .chat-step[data-until], .chat-step:has(.tap) { display: none; }
+  }
+</style>
+
+<script>
+  // Reveal each step at its time; hide « typing » once its time is up; loop. Runs only on screen.
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  for (const phone of document.querySelectorAll<HTMLElement>("[data-chat]")) {
+    if (reduce) continue;
+    const steps = [...phone.querySelectorAll<HTMLElement>(".chat-step")];
+    const end = Number(phone.dataset.end);
+    let timers: number[] = [];
+    let running = false;
+    const clear = () => {
+      timers.forEach(clearTimeout);
+      timers = [];
+      steps.forEach((s) => s.removeAttribute("data-on"));
+    };
+    const play = () => {
+      clear();
+      for (const s of steps) {
+        timers.push(window.setTimeout(() => s.setAttribute("data-on", ""), Number(s.dataset.at)));
+        if (s.dataset.until) timers.push(window.setTimeout(() => s.removeAttribute("data-on"), Number(s.dataset.until)));
+      }
+      timers.push(window.setTimeout(play, end));
+    };
+    new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && !running) {
+        running = true;
+        play();
+      } else if (!entry.isIntersecting && running) {
+        running = false;
+        clear();
+      }
+    }).observe(phone);
+  }
+</script>

@@ -1,0 +1,56 @@
+---
+/** « Comment ça marche » : the rule of the product in three steps, each with a small live piece
+ * of the conversation. Kayé proposes, the merchant decides, the code writes. */
+import { Image } from "astro:assets";
+import recu from "../../assets/tickets/recu.png";
+---
+
+<section id="comment" class="bg-nuit text-cauri">
+  <div class="mx-auto flex max-w-[1200px] flex-col gap-14 px-6 py-24 @5xl:py-32">
+    <div class="flex flex-col gap-5 @5xl:flex-row @5xl:items-end @5xl:justify-between">
+      <h2 class="display m-0 text-[clamp(2.5rem,6cqi,4.5rem)]">Kayé propose.<br /><span class="text-solaire">Vous décidez.</span></h2>
+      <p class="m-0 max-w-[30rem] text-[1.125rem] leading-relaxed text-lilas">
+        Rien n'est écrit dans votre cahier sans votre « Oui ». Kayé comprend, calcule chaque montant et vous
+        montre ce qu'il va noter. Vous gardez la main, toujours.
+      </p>
+    </div>
+
+    <ol class="m-0 grid list-none gap-5 p-0 @4xl:grid-cols-3">
+      <li class="flex flex-col gap-5 rounded-[28px] bg-nuit-2 p-7">
+        <span class="display text-[3.25rem] text-solaire">1</span>
+        <h3 class="m-0 font-display text-[1.75rem] font-bold tracking-tight">Vous envoyez</h3>
+        <p class="m-0 text-[1.0625rem] leading-relaxed text-lilas">Un vocal, une photo du cahier, un texte ou le SMS d'un paiement T-Money ou Flooz.</p>
+        <div class="mt-auto flex items-center gap-3 rounded-2xl bg-[#ffd9b8] px-4 py-3 text-nuit" aria-hidden="true">
+          <span class="text-[12px] text-laterite">▶</span>
+          <span class="k-wave flex h-6 flex-1 items-center gap-[3px]">
+            {[8, 16, 11, 20, 13, 22, 9, 17, 12, 19, 9, 15, 21, 11, 16, 10].map((h, i) => <span style={`height:${h}px;animation-delay:${i * 55}ms`} />)}
+          </span>
+          <span class="num text-[13px] text-gris">0:12</span>
+        </div>
+      </li>
+      <li class="flex flex-col gap-5 rounded-[28px] bg-nuit-2 p-7">
+        <span class="display text-[3.25rem] text-solaire">2</span>
+        <h3 class="m-0 font-display text-[1.75rem] font-bold tracking-tight">Kayé vous propose</h3>
+        <p class="m-0 text-[1.0625rem] leading-relaxed text-lilas">Ce qu'il a compris, avec les montants recalculés. Un seul récapitulatif, même pour un long vocal.</p>
+        <div class="mt-auto flex flex-col gap-1 rounded-2xl bg-papier p-4 text-[14px] text-nuit" aria-hidden="true">
+          <b>Vente à Ama Koudjo</b>
+          <span class="num">3 sacs riz × 11 000 = 33 000</span>
+          <span class="num text-laterite">Reste dû : <b>8 000</b></span>
+          <span class="mt-2 grid grid-cols-3 gap-1.5 text-center font-semibold text-lagune">
+            <span class="k-ring rounded-lg bg-solaire-soft py-1.5 text-solaire"><span class="relative text-lagune">Oui</span></span>
+            <span class="rounded-lg bg-cauri py-1.5">Corriger</span>
+            <span class="rounded-lg bg-cauri py-1.5">Annuler</span>
+          </span>
+        </div>
+      </li>
+      <li class="flex flex-col gap-5 rounded-[28px] bg-nuit-2 p-7">
+        <span class="display text-[3.25rem] text-solaire">3</span>
+        <h3 class="m-0 font-display text-[1.75rem] font-bold tracking-tight">C'est noté</h3>
+        <p class="m-0 text-[1.0625rem] leading-relaxed text-lilas">Le cahier est à jour, le reçu part au nom de votre boutique, et le soir le bilan arrive.</p>
+        <div class="relative mt-auto h-[132px] overflow-hidden rounded-2xl bg-nuit" aria-hidden="true">
+          <Image src={recu} alt="" width={260} class="k-float absolute left-1/2 top-4 w-[200px] -translate-x-1/2 rotate-[-3deg] rounded" />
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>

@@ -1,0 +1,42 @@
+---
+/** « Deux façons de tenir boutique » : the neighbourhood shop that writes its day's sales without
+ * names, and the online seller who owes each customer a receipt. Kayé reads both. */
+import { Image } from "astro:assets";
+import RegisterPage from "../RegisterPage.astro";
+import cahier from "../../assets/photos/commercant-cahier.jpg";
+import facture from "../../assets/tickets/facture.png";
+---
+
+<section class="bg-cauri text-nuit">
+  <div class="mx-auto flex max-w-[1200px] flex-col gap-12 px-6 py-24 @5xl:py-32">
+    <div class="flex max-w-[44rem] flex-col gap-5">
+      <span class="eyebrow text-laterite">Deux façons de tenir boutique</span>
+      <h2 class="display m-0 text-[clamp(2.5rem,6cqi,4.5rem)]">Que vous vendiez au comptoir ou en ligne.</h2>
+    </div>
+
+    <div class="grid gap-5 @4xl:grid-cols-2">
+      <article class="relative flex flex-col gap-5 overflow-hidden rounded-[32px] bg-papier p-8 @3xl:p-10">
+        <span class="w-fit rounded-full bg-cauri px-3 py-1 text-[13px] font-bold">La boutique du quartier</span>
+        <h3 class="m-0 font-display text-[2rem] leading-tight font-bold tracking-tight">Le registre du jour, sans noms.</h3>
+        <p class="m-0 max-w-[28rem] text-[1.0625rem] leading-relaxed text-gris">
+          Vous notez ce qui part : « riz 1 500, huile 1 200 ». Une photo le soir, Kayé recopie chaque ligne,
+          marque ❓ ce qui est peu lisible, et vos ventes du jour sont comptées.
+        </p>
+        <div class="mt-4 flex justify-center pb-2"><RegisterPage class="scale-[0.92]" /></div>
+      </article>
+
+      <article class="relative flex flex-col gap-5 overflow-hidden rounded-[32px] bg-solaire p-8 text-nuit @3xl:p-10">
+        <span class="w-fit rounded-full bg-nuit px-3 py-1 text-[13px] font-bold text-cauri">La vente en ligne et sur commande</span>
+        <h3 class="m-0 font-display text-[2rem] leading-tight font-bold tracking-tight">Un nom, une commande, un reçu.</h3>
+        <p class="m-0 max-w-[28rem] text-[1.0625rem] leading-relaxed">
+          Vous livrez des commandes passées sur WhatsApp ou Instagram. Chaque client, chaque entreprise reçoit
+          son reçu ou sa facture au nom de votre boutique, prêt à transférer.
+        </p>
+        <div class="relative mt-4 h-[330px]">
+          <Image src={cahier} alt="Un commerçant note une commande dans son cahier" widths={[400, 640]} sizes="320px" class="absolute top-0 left-0 h-[250px] w-[62%] rounded-[24px] object-cover" />
+          <Image src={facture} alt="Une facture au nom de la boutique" width={300} class="absolute top-6 right-2 w-[44%] rotate-[4deg] rounded-md shadow-lift" />
+        </div>
+      </article>
+    </div>
+  </div>
+</section>

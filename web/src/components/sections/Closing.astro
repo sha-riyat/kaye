@@ -1,0 +1,61 @@
+---
+/** Trust, then the one action: write to Kayé. Ends on the footer. */
+import { Image } from "astro:assets";
+import qr from "../../assets/brand/qr-whatsapp-nuit.svg";
+import lockup from "../../assets/brand/lockup-cauri.svg";
+import cauris from "../../assets/photos/cauris.jpg";
+import { GITHUB, PHONE, WHATSAPP } from "../../site";
+
+const facts = [
+  { n: "0", t: "écriture sans votre « Oui »" },
+  { n: "≈ 1 300 FCFA", t: "de coût d'IA par boutique et par mois" },
+  { n: "1 photo", t: "pour reprendre la page du cahier" },
+];
+---
+
+<section class="bg-cauri text-nuit">
+  <div class="mx-auto grid max-w-[1200px] gap-5 px-6 py-24 @4xl:grid-cols-[1.25fr_1fr] @5xl:py-32">
+    <div class="flex flex-col gap-6 rounded-[32px] bg-papier p-8 @3xl:p-12">
+      <span class="eyebrow text-lagune">Vos comptes restent à vous</span>
+      <h2 class="m-0 font-display text-[clamp(2rem,4cqi,3rem)] leading-[1.02] font-bold tracking-tight">Pas de publicité, pas de revente, rien pour entraîner des modèles.</h2>
+      <p class="m-0 text-[1.0625rem] leading-relaxed text-gris">
+        Kayé n'écrit jamais à vos clients à votre place : il prépare le message, vous l'envoyez. Et vous pouvez
+        tout effacer à tout moment en écrivant « supprimer mes données ».
+      </p>
+      <dl class="m-0 mt-2 grid gap-5 @3xl:grid-cols-3">
+        {facts.map((f) => (
+          <div class="flex flex-col gap-1 border-t-2 border-solaire pt-3">
+            <dt class="display text-[2rem]">{f.n}</dt>
+            <dd class="m-0 text-[0.9375rem] text-gris">{f.t}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+    <div class="relative min-h-[320px] overflow-hidden rounded-[32px]">
+      <Image src={cauris} alt="Deux cauris, la monnaie historique de l'Afrique de l'Ouest" widths={[480, 720]} sizes="480px" class="absolute inset-0 h-full w-full object-cover" />
+    </div>
+  </div>
+
+  <div class="bg-solaire">
+    <div class="mx-auto flex max-w-[1200px] flex-col gap-10 px-6 py-20 @4xl:flex-row @4xl:items-center @4xl:justify-between">
+      <div class="flex flex-col gap-5">
+        <h2 class="display m-0 text-[clamp(2.75rem,7cqi,5.25rem)]">Dites bonjour<br />à Kayé.</h2>
+        <p class="m-0 text-[1.25rem]">Scannez le code ou écrivez au <b class="num">{PHONE}</b>. Mode démo : données fictives.</p>
+        <a href={WHATSAPP} class="btn btn-night w-fit">Ouvrir WhatsApp</a>
+      </div>
+      <div class="w-fit rounded-[28px] bg-papier p-5"><img src={qr.src} alt="QR code vers la conversation WhatsApp de Kayé" width="200" height="200" class="block" /></div>
+    </div>
+  </div>
+
+  <footer class="bg-nuit text-gris-clair">
+    <div class="mx-auto flex max-w-[1200px] flex-col gap-6 px-6 py-12 @3xl:flex-row @3xl:items-center @3xl:justify-between">
+      <img src={lockup.src} alt="Kayé" width="110" height="38" class="h-8 w-auto" />
+      <span class="text-[15px]">Fait à Lomé · Parle. Kayé note.</span>
+      <span class="flex gap-6 text-[15px]">
+        <a href="/confidentialite" class="text-cauri">Confidentialité</a>
+        <a href="/en" class="text-cauri">English</a>
+        <a href={GITHUB} class="text-cauri">GitHub</a>
+      </span>
+    </div>
+  </footer>
+</section>

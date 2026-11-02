@@ -1,0 +1,56 @@
+---
+/** « Tout ce que Kayé tient pour vous » : the brand's adinkra-cut icons on paper notes, two of them
+ * in the colours that mean something (Solaire acts, Lagune is paid). */
+import vente from "../../assets/brand/icons/vente.svg";
+import vocal from "../../assets/brand/icons/vocal.svg";
+import cahierPhoto from "../../assets/brand/icons/cahier-photo.svg";
+import mobile from "../../assets/brand/icons/mobile-money.svg";
+import stock from "../../assets/brand/icons/stock.svg";
+import depense from "../../assets/brand/icons/depense.svg";
+import fournisseur from "../../assets/brand/icons/fournisseur.svg";
+import recu from "../../assets/brand/icons/recu.svg";
+import bilan from "../../assets/brand/icons/bilan.svg";
+import relance from "../../assets/brand/icons/relance.svg";
+import equipe from "../../assets/brand/icons/equipe.svg";
+import echeance from "../../assets/brand/icons/echeance.svg";
+
+const items = [
+  { icon: vente, t: "Ventes et crédits", d: "Qui a acheté quoi, qui a payé, qui doit encore. Calculé au franc près." },
+  { icon: vocal, t: "Vocaux", d: "Un long vocal avec plusieurs opérations donne un seul récapitulatif.", tone: "sun" },
+  { icon: cahierPhoto, t: "Photo du cahier", d: "Le registre du jour ou le cahier de crédits, recopiés ligne par ligne." },
+  { icon: mobile, t: "Mobile money", d: "Le SMS T-Money ou Flooz transféré solde la bonne dette, jamais deux fois." },
+  { icon: stock, t: "Stock", d: "Ce qui rentre, ce qui sort, combien de jours il vous reste. Une photo de l'étagère, et Kayé compte." },
+  { icon: depense, t: "Dépenses et caisse", d: "Transport, loyer, sachets : ce qui sort, et ce qui doit rester en caisse." },
+  { icon: fournisseur, t: "Fournisseurs", d: "Ce que vous devez au grossiste, et un rappel la veille de l'échéance." },
+  { icon: recu, t: "Reçus et factures", d: "Au nom de votre boutique, avec votre logo, prêts à transférer.", tone: "paid" },
+  { icon: bilan, t: "Bilans", d: "Chaque soir la journée en une image, la semaine et le mois sur demande." },
+  { icon: relance, t: "Relances", d: "La liste de qui vous doit, et un message poli prêt à envoyer." },
+  { icon: equipe, t: "Vendeurs", d: "Vos vendeurs notent leurs ventes ; vous seul voyez les totaux." },
+  { icon: echeance, t: "En français", d: "Comme à un proche, avec vos mots : tas, bol, sac, demi-sac, tine." },
+];
+---
+
+<section class="bg-papier text-nuit">
+  <div class="mx-auto flex max-w-[1200px] flex-col gap-12 px-6 py-24 @5xl:py-32">
+    <div class="flex flex-col gap-5 @5xl:flex-row @5xl:items-end @5xl:justify-between">
+      <h2 class="display m-0 max-w-[40rem] text-[clamp(2.5rem,6cqi,4.5rem)]">Tout ce que Kayé tient pour vous.</h2>
+      <p class="m-0 max-w-[28rem] text-[1.125rem] leading-relaxed text-gris">
+        Ce que promettaient les logiciels de gestion, sans tableau de bord ni ordinateur : vous parlez, Kayé tient la boutique.
+      </p>
+    </div>
+    <ul class="m-0 grid list-none gap-3.5 p-0 @3xl:grid-cols-2 @5xl:grid-cols-4">
+      {items.map((it) => (
+        <li class:list={[
+          "flex flex-col gap-3 rounded-[24px] p-6",
+          it.tone === "sun" ? "bg-solaire" : it.tone === "paid" ? "bg-lagune text-papier" : "bg-cauri",
+        ]}>
+          <span class:list={["grid h-16 w-16 place-items-center rounded-2xl", it.tone ? "bg-cauri" : "bg-papier"]}>
+            <img src={it.icon.src} alt="" width="44" height="44" />
+          </span>
+          <h3 class="m-0 font-display text-[1.4rem] font-bold tracking-tight">{it.t}</h3>
+          <p class:list={["m-0 text-[1rem] leading-relaxed", it.tone === "paid" ? "text-[#e6f2ee]" : it.tone === "sun" ? "" : "text-gris"]}>{it.d}</p>
+        </li>
+      ))}
+    </ul>
+  </div>
+</section>
