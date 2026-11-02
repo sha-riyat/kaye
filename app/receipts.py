@@ -125,14 +125,111 @@ def summary_data(shop: dict, f, when: datetime) -> dict:
             {"name": s.contact.name, "due": s.balance, "date": _day(s.due_date)} for s in f.supplier_dues[:SUMMARY_ROWS]
         ],
         "low_stock": [{"name": pr.name, "stock": pr.stock} for pr in f.low_stock[:SUMMARY_ROWS]],
+        "days": _bars(f.days),
+        # the breakdown only says something over several days, or when there are several labels
+        "expense_lines": [{"label": label, "amount": amount} for label, amount in f.expenses[:SUMMARY_ROWS]]
+        if f.days or len(f.expenses) > 1
+        else [],
     }
+
+
+BAR_PX = 150
+
+
+def _bars(days: list) -> list[dict]:
+    """Sales per day as bars: the busiest day and today carry their amount, today in Solaire."""
+    if not days:
+        return []
+    top = max(v for _, v in days) or 1
+    last = len(days) - 1
+    return [
+        {
+            "label": f"{d.day}" if len(days) <= 10 or i % 5 == 0 or i == last else "",
+            "h": max(round(max(v, 0) / top * BAR_PX), 2),
+            "value": v,
+            "show": i == last or (v == top and v > 0),
+            "current": i == last,
+        }
+        for i, (d, v) in enumerate(days)
+    ]
 
 
 def summary_extra_height(data: dict) -> int:
     """Room for the optional sections; the image is cropped to the ticket, so too much is harmless."""
-    rows = len(data["debtors"]) + len(data["supplier_dues"]) + len(data["low_stock"])
-    sections = sum(1 for k in ("supplier_dues", "low_stock") if data[k])
-    return rows * 50 + sections * 90 + (60 if data["expenses"] or data["supplier_paid"] else 0)
+    rows = len(data["debtors"]) + len(data["supplier_dues"]) + len(data["low_stock"]) + len(data["expense_lines"])
+    sections = sum(1 for k in ("supplier_dues", "low_stock", "expense_lines") if data[k])
+    extra = rows * 50 + sections * 90 + (60 if data["expenses"] or data["supplier_paid"] else 0)
+    return extra + (320 if data["days"] else 0)
+
+
+def reminder_data(shop: dict, customer: str, items: list[dict], when: datetime) -> dict:
+    """`items`: {label, due, date, receipt} for each debt still open, oldest first."""
+    return {
+        "shop": shop,
+        "date": f"{when:%d/%m/%Y}",
+        "customer": customer,
+        "open_items": items,
+        "due": sum(i["due"] for i in items),
+        "pay_to": [],  # mobile money numbers are not recorded yet: the ticket says « à la boutique »
+    }
+
+
+def statement_data(shop: dict, customer: str, operations: list[dict], balance: int, when: datetime) -> dict:
+    first = operations[0]["date"] if operations else f"{when:%d/%m}"
+    return {
+        "shop": shop,
+        "period": f"du {first} au {when:%d/%m/%Y}",
+        "customer": customer,
+        "operations": operations,
+        "balance": balance,
+    }
+
+
+def settlement_data(shop: dict, number: int, customer: str, before: int, entry: Entry, when: datetime) -> dict:
+    return {
+        "shop": shop,
+        "number": f"{number:04d}",
+        "date": f"{when:%d/%m/%Y}",
+        "time": f"{when:%H:%M}",
+        "customer": customer,
+        "before": before,
+        "amount": entry.amount,
+        "method": "mobile money" if entry.source == "mobile_money" else "espèces",
+        "reference": entry.payment_reference or "",
+        "code": f"KY-Q{number:04d}-{entry.id:X}",
+    }
+
+
+STOCK_DAYS_FULL = 14  # a bar is full at two weeks of sales
+STOCK_DAYS_LOW = 5
+
+
+def stock_data(shop: dict, products: list, sold_week: dict[str, int], key, when: datetime, low_stock: int) -> dict:
+    """Each tracked product with what is left and, when it sold this week, how many days that lasts."""
+    from app.agent.actions import plural
+
+    rows = []
+    for p in products:
+        per_day = sold_week.get(key(p.name), 0) / 7
+        days = int(p.stock / per_day) if per_day > 0 and p.stock > 0 else None
+        low = p.stock <= low_stock or (days is not None and days < STOCK_DAYS_LOW)
+        rows.append({
+            "name": p.name,
+            "stock": p.stock,
+            "unit": plural(p.default_unit, p.stock) if p.default_unit else "",
+            "days": days,
+            "w": 100 if days is None else max(min(days, STOCK_DAYS_FULL) / STOCK_DAYS_FULL * 100, 3),
+            "low": low,
+        })  # fmt: skip
+    rows.sort(key=lambda r: (not r["low"], r["days"] if r["days"] is not None else 999, r["name"]))
+    return {
+        "shop": shop,
+        "date_long": long_date(when),
+        "time": f"{when:%H:%M}",
+        "products": rows[:20],
+        "more": max(len(rows) - 20, 0),
+        "low_count": sum(1 for r in rows if r["low"]),
+    }
 
 
 def _chromium() -> str:

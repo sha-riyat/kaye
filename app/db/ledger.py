@@ -5,7 +5,7 @@ directly. Totals are recomputed from the lines (quantity x unit price) by the co
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import func
 from sqlmodel import col, select
@@ -227,6 +227,64 @@ async def period_summary(session: AsyncSession, *, shop_id: int, start: datetime
         elif kind == EntryKind.SUPPLIER_PAYMENT:
             supplier_paid += amount
     return Period(sales, cashed, credit, repaid, momo, expenses, supplier_paid, ops)
+
+
+async def daily_sales(session: AsyncSession, *, shop_id: int, start: datetime, end: datetime) -> list[tuple[date, int]]:
+    """Sales per calendar day over [start, end), days without sales included (Lomé is UTC)."""
+    rows = (
+        await session.exec(
+            select(Entry.created_at, Entry.amount).where(
+                Entry.shop_id == shop_id,
+                Entry.kind == EntryKind.SALE,
+                Entry.created_at >= start,
+                Entry.created_at < end,
+            )
+        )
+    ).all()
+    totals: dict[date, int] = {}
+    for created, amount in rows:
+        totals[created.date()] = totals.get(created.date(), 0) + amount
+    days = (end.date() - start.date()).days
+    return [(d, totals.get(d, 0)) for d in (start.date() + timedelta(days=i) for i in range(days))]
+
+
+async def expenses_by_label(
+    session: AsyncSession, *, shop_id: int, start: datetime, end: datetime
+) -> list[tuple[str, int]]:
+    """Expenses grouped by what they were for, largest first. Reversals net out."""
+    rows = (
+        await session.exec(
+            select(Entry.note, Entry.amount, col(Entry.reverses_entry_id)).where(
+                Entry.shop_id == shop_id, Entry.kind == EntryKind.EXPENSE,
+                Entry.created_at >= start, Entry.created_at < end,
+            )
+        )
+    ).all()  # fmt: skip
+    totals: dict[str, int] = {}
+    for note, amount, _ in rows:
+        label = (note or "autre").strip().lower()
+        totals[label] = totals.get(label, 0) + amount
+    return sorted(((k, v) for k, v in totals.items() if v), key=lambda kv: -kv[1])
+
+
+async def contact_entries(session: AsyncSession, *, shop_id: int, contact_id: int) -> list[Entry]:
+    """Everything that moved a contact's balance, oldest first."""
+    query = select(Entry).where(Entry.shop_id == shop_id, Entry.contact_id == contact_id, Entry.debt_delta != 0)
+    return list((await session.exec(query.order_by(col(Entry.created_at), col(Entry.id)))).all())
+
+
+def open_items(entries: list[Entry]) -> list[tuple[Entry, int]]:
+    """The debts still unpaid and how much of each is left: payments settle the oldest first."""
+    debts = [[e, e.debt_delta] for e in entries if e.debt_delta > 0 and e.reverses_entry_id is None]
+    reversed_ids = {e.reverses_entry_id for e in entries if e.reverses_entry_id is not None}
+    debts = [d for d in debts if d[0].id not in reversed_ids]
+    paid = -sum(e.debt_delta for e in entries if e.debt_delta < 0 and e.reverses_entry_id is None)
+    paid -= sum(e.debt_delta for e in entries if e.debt_delta > 0 and e.reverses_entry_id is not None)
+    for d in debts:
+        used = min(paid, d[1])
+        d[1] -= used
+        paid -= used
+    return [(e, left) for e, left in debts if left > 0]
 
 
 @dataclass(frozen=True)

@@ -31,6 +31,8 @@ ITEMS: list[Item] = [
     Item("releve-ticket", "Relevé client · ticket", "releve.html.j2", "releve", 1080, 1650, 3480, 1700),
     Item("quittance-ticket", "Quittance · ticket", "quittance.html.j2", "quittance", 1080, 1450, 4640, 1700),
     Item("bilan-ticket", "Bilan du jour · ticket", "bilan.html.j2", "bilan", 1080, 1750, 5800, 1700),
+    Item("bilan-semaine", "Bilan de la semaine · ticket", "bilan.html.j2", "bilan_semaine", 1080, 2300, 6960, 1700),
+    Item("stock-ticket", "État du stock · ticket", "stock.html.j2", "stock", 1080, 1700, 8120, 1700),
 ]
 
 

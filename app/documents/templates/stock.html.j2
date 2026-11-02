@@ -1,0 +1,38 @@
+{% extends "_ticket.html.j2" %}
+{% block kind %}État du stock{% endblock %}
+{% block doc_h %}1500{% endblock %}
+{% block head_meta %}
+<div class="row"><span class="doc-kind">État du stock</span><span class="label">{{ date_long }}</span></div>
+<div class="row"><span class="label">Produits suivis</span><strong>{{ products | length + more }}</strong></div>
+{% endblock %}
+{% block extra_css %}
+.stock { display: flex; flex-direction: column; gap: 14px; }
+.item { display: grid; grid-template-columns: 1fr 120px; gap: 6px 16px; align-items: center; }
+.item .n { font-size: 17px; }
+.item .q { text-align: right; font-size: 17px; font-weight: 700; }
+.item .q.low { color: var(--laterite); }
+.track { grid-column: 1 / -1; height: 12px; background: #F1E6D3; border-radius: 4px; overflow: hidden; }
+.fill { height: 12px; border-radius: 0 4px 4px 0; background: var(--lagune); }
+.fill.low { background: var(--laterite); }
+.fill.unknown { background: #D6C8AE; }
+.item .days { grid-column: 1 / -1; font-size: 14px; color: var(--gris); }
+{% endblock %}
+{% block body %}
+<div class="stock">
+  {% for p in products %}
+  <div class="item">
+    <span class="n">{{ p.name }}</span>
+    <span class="q{{ ' low' if p.low }}">{{ p.stock }}{% if p.unit %} {{ p.unit }}{% endif %}</span>
+    <div class="track"><div class="fill{{ ' low' if p.low }}{{ ' unknown' if p.days is none }}" style="width:{{ p.w }}%"></div></div>
+    <span class="days">{% if p.days is none %}Pas de vente cette semaine{% elif p.days == 0 %}Épuisé au rythme actuel{% else %}≈ {{ p.days }} jour{{ 's' if p.days > 1 }} au rythme de la semaine{% endif %}</span>
+  </div>
+  {% endfor %}
+  {% if more %}<p class="note">et {{ more }} autre{{ 's' if more > 1 }}</p>{% endif %}
+</div>
+{% if low_count %}
+<div class="band due"><span class="label">À recommander</span><span class="amount display">{{ low_count }} produit{{ 's' if low_count > 1 }}</span></div>
+{% else %}
+<div class="band paid"><span class="label">Stock</span><span class="amount display">En ordre</span></div>
+{% endif %}
+{% endblock %}
+{% block seal %}État préparé par Kayé à {{ time }}{% endblock %}

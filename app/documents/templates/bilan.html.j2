@@ -15,6 +15,12 @@
 .list { display: flex; flex-direction: column; gap: 10px; }
 .list .row { font-size: 17px; }
 .section { font-size: 15px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.bars { display: flex; align-items: flex-end; gap: 6px; }
+.bar { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; }
+.bar .b { width: 100%; max-width: 44px; background: #6B5F7A; border-radius: 4px 4px 0 0; }
+.bar .b.now { background: var(--solaire); }
+.bar .v { font-size: 12px; font-weight: 700; white-space: nowrap; height: 15px; }
+.bar .d { font-size: 12px; color: var(--gris); height: 15px; }
 {% endblock %}
 {% block body %}
 <div class="total"><span class="label">Ventes</span><span class="amount display">{{ sales | fcfa }} <small>FCFA</small></span></div>
@@ -28,6 +34,24 @@
 <div class="row"><span class="label">Sorties{% if expenses and supplier_paid %} · dépenses {{ expenses | fcfa }}, fournisseurs {{ supplier_paid | fcfa }}{% endif %}</span><strong>{{ (expenses + supplier_paid) | fcfa }}</strong></div>
 {% endif %}
 <div class="band info"><span class="label">En caisse</span><span class="amount display">{{ cash_in_hand | fcfa }} FCFA</span></div>
+{% if days %}
+<div class="rule"></div>
+<span class="section">Ventes jour par jour</span>
+<div class="bars" aria-label="Ventes par jour">
+  {% for b in days %}
+  <div class="bar"><span class="v">{% if b.show %}{{ b.value | fcfa }}{% endif %}</span><div class="b{{ ' now' if b.current }}" style="height:{{ b.h }}px"></div><span class="d">{{ b.label }}</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if expense_lines %}
+<div class="rule"></div>
+<span class="section">Dépenses</span>
+<div class="list">
+  {% for e in expense_lines %}
+  <div class="row"><span>{{ e.label }}</span><strong>{{ e.amount | fcfa }}</strong></div>
+  {% endfor %}
+</div>
+{% endif %}
 {% if debtors %}
 <div class="rule"></div>
 <span class="section">À relancer</span>

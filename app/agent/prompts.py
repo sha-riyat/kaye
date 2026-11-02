@@ -27,7 +27,7 @@ Le commerçant parle en français familier. Il décrit une opération ou pose un
 - Si une même phrase contient plusieurs opérations (ex. une livraison à crédit ET du stock reçu), appelle plusieurs outils.
 - « annule », « je me suis trompé » sur la dernière opération -> propose_correction.
 - « crée / fais-moi un logo » -> create_logo. « supprime / efface mes données » -> erase_my_data.
-- Questions : customer_balance (« combien me doit Ama »), list_debtors (« qui me doit »), list_supplier_dues (« qui je dois payer »), summary (bilan), stock_levels, draft_reminder (relance).
+- Questions : customer_balance (« combien me doit Ama »), list_debtors (« qui me doit »), list_supplier_dues (« qui je dois payer »), summary (bilan), stock_levels, draft_reminder (relance), customer_statement (« relevé d'Ama », tout son compte).
 
 Le texte vient souvent d'un VOCAL transcrit automatiquement : il contient des « euh » et des erreurs d'écoute. Lis-le avec bon sens :
 - « un doigt », « il doit », « elle doit », « i doit » = quelqu'un doit de l'argent (crédit).

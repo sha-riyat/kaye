@@ -8,10 +8,11 @@
 <p style="margin:0;font-size:22px;line-height:1.5">Bonjour {{ customer }},<br>il reste un montant à régler chez {{ shop.name }}. Merci de votre fidélité !</p>
 <div class="lines">
   {% for item in open_items %}
-  <div class="line"><strong><span>{{ item.label }}</span><span>{{ item.due | fcfa }}</span></strong><span>{{ item.date }} · reçu n° {{ item.receipt }}</span></div>
+  <div class="line"><strong><span>{{ item.label }}</span><span>{{ item.due | fcfa }}</span></strong><span>{{ item.date }}{% if item.receipt %} · reçu n° {{ item.receipt }}{% endif %}</span></div>
   {% endfor %}
 </div>
 <div class="band due"><span class="label">À régler</span><span class="amount display">{{ due | fcfa }} FCFA</span></div>
+{% if pay_to %}
 <div class="pay">
   <strong>Payer par</strong>
   {% for method in pay_to %}
@@ -19,5 +20,8 @@
   {% endfor %}
   <span class="note" style="font-size:14px">Ou directement à la boutique. Déjà payé ? Merci, ignorez ce message.</span>
 </div>
+{% else %}
+<p class="note">À régler à la boutique. Déjà payé ? Merci, ignorez ce message.</p>
+{% endif %}
 {% endblock %}
 {% block seal %}Rappel envoyé par {{ shop.name }} avec Kayé{% endblock %}

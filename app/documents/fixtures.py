@@ -160,6 +160,64 @@ def daily_summary() -> dict:
         "outstanding": sum(d["due"] for d in debtors),
         "supplier_dues": [{"name": "Koffi", "due": 180_000, "date": "07/11"}],
         "low_stock": [{"name": "tomate concentrée", "stock": 2}, {"name": "huile 5 L", "stock": 3}],
+        "days": [],
+        "expense_lines": [{"label": "transport", "amount": 3_500}, {"label": "sachets", "amount": 1_500}],
+    }
+
+
+WEEK = [(25, 176_000), (26, 64_000), (27, 98_500), (28, 112_000), (29, 87_000), (30, 131_500), (31, 148_500)]
+
+
+def weekly_summary() -> dict:
+    top = max(v for _, v in WEEK)
+    days = [
+        {"label": str(d), "h": round(v / top * 150), "value": v, "show": v == top or i == 6, "current": i == 6}
+        for i, (d, v) in enumerate(WEEK)
+    ]
+    sales = sum(v for _, v in WEEK)
+    credit = 82_000
+    return {
+        **daily_summary(),
+        "title": "Bilan des 7 derniers jours",
+        "date_long": "du 25/10 au 31/10/2026",
+        "operations": 141,
+        "sales": sales,
+        "cashed": sales - credit,
+        "credit": credit,
+        "mobile_money": 164_000,
+        "repaid": 61_000,
+        "expenses": 38_500,
+        "cash_in_hand": sales - credit + 61_000 - 38_500,
+        "days": days,
+        "expense_lines": [
+            {"label": "loyer", "amount": 20_000},
+            {"label": "transport", "amount": 12_500},
+            {"label": "sachets", "amount": 6_000},
+        ],
+    }
+
+
+def stock() -> dict:
+    rows = [
+        ("tomate concentrée", 6, "boîtes", 2),
+        ("huile 5 L", 3, "bidons", 4),
+        ("savon", 18, "", 6),
+        ("riz 25 kg", 32, "sacs", 9),
+        ("sucre 1 kg", 118, "paquets", 14),
+        ("piles", 40, "", None),
+    ]
+    products = [
+        {"name": n, "stock": s, "unit": u, "days": d, "w": 100 if d is None else min(d, 14) / 14 * 100,
+         "low": s <= 3 or (d is not None and d < 5)}
+        for n, s, u, d in rows
+    ]  # fmt: skip
+    return {
+        "shop": SHOP,
+        "date_long": "vendredi 31 octobre 2026",
+        "time": "18:40",
+        "products": products,
+        "more": 0,
+        "low_count": sum(1 for p in products if p["low"]),
     }
 
 
@@ -171,4 +229,6 @@ FIXTURES = {
     "releve": statement,
     "quittance": settlement,
     "bilan": daily_summary,
+    "bilan_semaine": weekly_summary,
+    "stock": stock,
 }

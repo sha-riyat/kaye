@@ -12,6 +12,10 @@ class Reply:
     image: bytes | None = None  # PNG, sent as an image with `text` as caption
     link: str | None = None  # wa.me link appended to the text by the sender
     kind: str = "info"  # proposal (waits for Oui), question (missing value), choice (pick a contact), info
+    # A document the router draws as this reply's image, e.g. ("rappel", contact_id). `text` stays the
+    # fallback if it cannot be drawn; `caption` replaces it under the image when given.
+    doc: tuple[str, int] | None = None
+    caption: str | None = None
 
     def __post_init__(self) -> None:
         if len(self.buttons) > 3:

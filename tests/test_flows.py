@@ -788,3 +788,84 @@ async def test_a_greeting_is_never_taken_as_the_shop_name(db, models):
     await c.send(text="Bonjour")
     again = await c.send(text="Salut !")
     assert "comment s'appelle votre boutique" in again[0].text.lower()
+
+
+# --- documents drawn as images ---
+
+
+async def test_paying_off_a_debt_sends_a_quittance(chat, rendered):
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])  # receipt 0001, Ama owes 8 000
+    pay = await chat.say("Ama a payé 8 000", ("propose_payment", {"customer": "Ama", "amount": 8_000}))
+    done = await chat.tap(pay[0].buttons[0][0])
+    assert "Sa dette est soldée" in done[0].text
+    assert done[-1].image and done[-1].text.startswith("Quittance pour Ama Koudjo")
+    template, data = rendered[-1]
+    assert template == "quittance.html.j2" and (data["number"], data["before"], data["amount"]) == (
+        "0002",
+        8_000,
+        8_000,
+    )
+
+
+async def test_a_partial_payment_sends_no_quittance(chat, rendered):
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])
+    pay = await chat.say("Ama a payé 3 000", ("propose_payment", {"customer": "Ama", "amount": 3_000}))
+    done = await chat.tap(pay[0].buttons[0][0])
+    assert len(done) == 1 and "Il reste 5 000" in done[0].text
+    assert all(t != "quittance.html.j2" for t, _ in rendered)
+
+
+async def test_reminder_and_statement_are_drawn(chat, rendered):
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])
+    debtors = await chat.send(text="qui me doit ?")
+    reminder = await chat.tap(debtors[0].buttons[0][0])
+    assert reminder[0].image and "il reste 8 000 FCFA chez Chez Afi" in reminder[0].text
+    template, data = rendered[-1]
+    assert template == "rappel.html.j2" and data["due"] == 8_000
+    assert data["open_items"][0]["receipt"] == "0001" and data["open_items"][0]["label"].startswith("Achat du")
+    pay = await chat.say("Ama a payé 3 000", ("propose_payment", {"customer": "Ama", "amount": 3_000}))
+    await chat.tap(pay[0].buttons[0][0])
+    statement = await chat.say("relevé d'Ama", ("customer_statement", {"name": "Ama"}))
+    assert statement[0].image and statement[0].text.startswith("Relevé de Ama Koudjo")
+    template, data = rendered[-1]
+    assert template == "releve.html.j2" and data["balance"] == 5_000
+    assert [(op["label"], op["delta"]) for op in data["operations"]] == [
+        ("Achat · reçu 0001", 8_000),
+        ("Paiement espèces", -3_000),
+    ]
+
+
+async def test_stock_is_drawn_with_days_left(chat, rendered):
+    got = await chat.say(
+        "j'ai 20 sacs de riz",
+        ("propose_stock_change", {"product": "riz", "quantity": 20, "mode": "set", "unit": "sac"}),
+    )
+    await chat.tap(got[0].buttons[0][0])
+    sale = await chat.say("vente", SALE)  # 3 sacs
+    await chat.tap(sale[0].buttons[0][0])
+    stock = await chat.send(text="stock")
+    assert stock[0].image and stock[0].text == "*Votre stock* · 1 produit(s) suivi(s)"
+    template, data = rendered[-1]
+    row = data["products"][0]
+    assert template == "stock.html.j2" and (row["stock"], row["unit"], row["days"], row["low"]) == (
+        17,
+        "sacs",
+        39,
+        False,
+    )
+
+
+async def test_weekly_summary_has_a_bar_per_day_and_the_expenses(chat, rendered):
+    sale = await chat.say("vente", SALE)
+    await chat.tap(sale[0].buttons[0][0])
+    spend = await chat.say("transport 3 500", ("propose_expense", {"amount": 3_500, "label": "transport"}))
+    await chat.tap(spend[0].buttons[0][0])
+    week = await chat.say("bilan de la semaine", ("summary", {"period": "week"}))
+    assert week[0].image and week[0].text.startswith("*Bilan des 7 derniers jours*")
+    template, data = rendered[-1]
+    assert template == "bilan.html.j2" and len(data["days"]) == 7
+    assert data["days"][-1]["current"] and data["days"][-1]["value"] == 33_000
+    assert data["expense_lines"] == [{"label": "transport", "amount": 3_500}]

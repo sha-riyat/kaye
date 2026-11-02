@@ -6,6 +6,7 @@ action in the database.
 
 import logging
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 from sqlmodel import select
 
@@ -13,15 +14,19 @@ from app.agent import actions
 from app.agent.actions import Ctx
 from app.agent.prompts import AFTER_NAME, DEMO_NOTICE, WELCOME
 from app.agent.reply import Reply
-from app.db import queries
-from app.db.models import Entry, EntrySource, Media, PendingStatus, Receipt, Shop
+from app.db import ledger, queries
+from app.db.models import Contact, Entry, EntryKind, EntrySource, Media, PendingStatus, Receipt, Shop
 from app.meta_media import logo_prompt
 from app.receipts import (
     RenderError,
     extra_height,
     receipt_data,
+    reminder_data,
     render_png,
+    settlement_data,
     shop_card,
+    statement_data,
+    stock_data,
     summary_data,
     summary_extra_height,
 )
@@ -132,6 +137,8 @@ async def _process(session, svc: Services, msg: InboundMessage, text: str | None
             expanded.append(await _receipt_reply(ctx, svc, int(r.text)))
         elif r.kind == "bilan":
             expanded.append(await summary_reply(ctx.session, svc, ctx.shop, r.text, ctx.now))
+        elif r.doc:
+            expanded.append(await _draw(ctx, svc, r))
         elif r.kind == "logo":
             expanded += await _logo_proposals(ctx, svc)
         else:
@@ -330,6 +337,8 @@ async def _confirm(ctx: Ctx, svc: Services, pending) -> list[Reply]:
         texts.append(applied.reply.text)
         if applied.sale_entry_id:
             receipts.append(await _receipt_reply(ctx, svc, applied.sale_entry_id))
+        if applied.extra:
+            receipts.append(applied.extra)  # drawn with the other replies of this message
     if pending.kind == "batch":
         await queries.settle_pending(ctx.session, pending, PendingStatus.CONFIRMED)
     if not texts:
@@ -366,6 +375,98 @@ async def summary_reply(session, svc: Services, shop: Shop, period: str, now) ->
         log.exception("summary rendering failed for shop %s", shop.id)
         return Reply(actions.summary_text_of(figures))
     return Reply(actions.summary_caption(figures), image=png)
+
+
+async def _draw(ctx: Ctx, svc: Services, reply: Reply) -> Reply:
+    """Draw the document a reply carries. If that fails, the reply goes out as its text alone."""
+    kind, ref = reply.doc
+    try:
+        card = await _shop_card(ctx.session, svc, ctx.shop)
+        template, data, extra = await DRAWERS[kind](ctx, card, ref)
+        reply.image = await render_png(template, data, extra)
+    except (RenderError, OSError):
+        log.exception("could not draw %s %s", kind, ref)
+        return reply
+    if reply.caption:
+        reply.text = reply.caption
+    return reply
+
+
+async def _receipt_number(session, entry_id: int) -> int | None:
+    return (await session.exec(select(Receipt.number).where(Receipt.entry_id == entry_id))).first()
+
+
+def _debt_label(e: Entry, left: int) -> str:
+    if e.source == EntrySource.NOTEBOOK_PHOTO:
+        return f"Cahier du {e.created_at:%d/%m}"
+    return f"{'Reste de l’achat' if left < e.debt_delta else 'Achat'} du {e.created_at:%d/%m}"
+
+
+REMINDER_ROWS = 7
+
+
+async def _draw_reminder(ctx: Ctx, card: dict, contact_id: int):
+    contact = await ctx.session.get(Contact, contact_id)
+    entries = await ledger.contact_entries(ctx.session, shop_id=ctx.shop.id, contact_id=contact_id)
+    items = []
+    for e, left in ledger.open_items(entries):
+        number = await _receipt_number(ctx.session, e.id)
+        items.append({
+            "label": _debt_label(e, left), "due": left, "date": f"{e.created_at:%d/%m/%Y}",
+            "receipt": f"{number:04d}" if number else "",
+        })  # fmt: skip
+    if len(items) > REMINDER_ROWS:  # the oldest in one line, so the total stays right
+        older, items = items[: -REMINDER_ROWS + 1], items[-REMINDER_ROWS + 1 :]
+        items.insert(0, {"label": "Achats plus anciens", "due": sum(i["due"] for i in older),
+                         "date": f"jusqu'au {older[-1]['date']}", "receipt": ""})  # fmt: skip
+    return "rappel.html.j2", reminder_data(card, contact.name, items, ctx.now), max(len(items) - 3, 0) * 70
+
+
+async def _draw_statement(ctx: Ctx, card: dict, contact_id: int):
+    contact = await ctx.session.get(Contact, contact_id)
+    entries = await ledger.contact_entries(ctx.session, shop_id=ctx.shop.id, contact_id=contact_id)
+    operations = []
+    for e in entries[-actions.STATEMENT_ROWS :]:
+        if e.reverses_entry_id is not None:
+            label = "Annulation"
+        elif e.kind == EntryKind.PAYMENT_RECEIVED:
+            label = "Paiement " + ("mobile money" if e.source == EntrySource.MOBILE_MONEY else "espèces")
+        elif e.source == EntrySource.NOTEBOOK_PHOTO:
+            label = "Repris du cahier"
+        else:
+            number = await _receipt_number(ctx.session, e.id)
+            label = "Achat" + (f" · reçu {number:04d}" if number else "")
+        operations.append({"date": f"{e.created_at:%d/%m}", "label": label, "delta": e.debt_delta})
+    data = statement_data(card, contact.name, operations, sum(e.debt_delta for e in entries), ctx.now)
+    return "releve.html.j2", data, max(len(operations) - 6, 0) * 50
+
+
+async def _draw_settlement(ctx: Ctx, card: dict, entry_id: int):
+    entry = await ctx.session.get(Entry, entry_id)
+    contact = await ctx.session.get(Contact, entry.contact_id)
+    after = await ledger.contact_balance(ctx.session, shop_id=ctx.shop.id, contact_id=contact.id)
+    number = await _receipt_number(ctx.session, entry.id)
+    if number is None:  # quittances share the receipts' numbering
+        number = await queries.next_receipt_number(ctx.session, ctx.shop.id)
+        ctx.session.add(Receipt(shop_id=ctx.shop.id, entry_id=entry.id, number=number, image_key=""))
+        await ctx.session.flush()
+    data = settlement_data(card, number, contact.name, after + entry.amount, entry, ctx.now)
+    return "quittance.html.j2", data, 0
+
+
+async def _draw_stock(ctx: Ctx, card: dict, _: int):
+    products = await queries.tracked_products(ctx.session, ctx.shop.id)
+    sold = await queries.quantities_sold(ctx.session, ctx.shop.id, ctx.now - timedelta(days=7))
+    data = stock_data(card, products, sold, queries.product_key, ctx.now, actions.LOW_STOCK)
+    return "stock.html.j2", data, max(len(data["products"]) - 6, 0) * 70
+
+
+DRAWERS = {
+    "rappel": _draw_reminder,
+    "releve": _draw_statement,
+    "quittance": _draw_settlement,
+    "stock": _draw_stock,
+}
 
 
 async def _receipt_reply(ctx: Ctx, svc: Services, entry_id: int) -> Reply:

@@ -58,6 +58,7 @@ class Applied:
 
     reply: Reply
     sale_entry_id: int | None = None  # a receipt should follow
+    extra: Reply | None = None  # another document to send, e.g. the quittance of a settled debt
 
 
 def money(amount: int) -> str:
@@ -86,6 +87,7 @@ READ_TOOLS: dict[str, type[BaseModel]] = {
     "summary": s.SummaryRequest,
     "stock_levels": s.StockQuestion,
     "draft_reminder": s.CustomerName,
+    "customer_statement": s.StatementRequest,
     "resend_receipt": s.ReceiptRequest,
     "create_logo": s.NoArgs,
     "erase_my_data": s.NoArgs,
@@ -586,6 +588,8 @@ class Figures:
     debtors: list[ledger.Debtor]
     supplier_dues: list[ledger.SupplierDue]
     low_stock: list
+    days: list[tuple[date, int]]  # sales per day, for periods longer than a day
+    expenses: list[tuple[str, int]]  # by label, largest first
 
     @property
     def owed(self) -> int:
@@ -599,12 +603,17 @@ class Figures:
 async def summary_figures(session: AsyncSession, shop: Shop, period: str, now: datetime | None = None) -> Figures:
     start, end, label = period_bounds(period, now or queries.utcnow())
     low = [pr for pr in await queries.tracked_products(session, shop.id) if (pr.stock or 0) <= LOW_STOCK]
+    days = []
+    if end - start > timedelta(days=1):
+        days = await ledger.daily_sales(session, shop_id=shop.id, start=start, end=end)
     return Figures(
         label=label, start=start, end=end,
         period=await ledger.period_summary(session, shop_id=shop.id, start=start, end=end),
         debtors=await ledger.debtors(session, shop_id=shop.id),
         supplier_dues=await ledger.supplier_dues(session, shop_id=shop.id),
         low_stock=low,
+        days=days,
+        expenses=await ledger.expenses_by_label(session, shop_id=shop.id, start=start, end=end),
     )  # fmt: skip
 
 
@@ -658,7 +667,9 @@ async def stock_levels(ctx: Ctx, a: s.StockQuestion) -> list[Reply]:
     if not products:
         return [Reply("Je ne suis encore aucun stock. Dites-moi par exemple : « j'ai reçu 20 sacs de riz ».")]
     lines = [f"{'⚠️ ' if (p.stock or 0) <= LOW_STOCK else ''}{p.name} : *{p.stock}*" for p in products[:30]]
-    return [Reply("*Votre stock :*\n" + "\n".join(lines))]
+    low = sum(1 for p in products if (p.stock or 0) <= LOW_STOCK)
+    caption = f"*Votre stock* · {len(products)} produit(s) suivi(s)" + (f", {low} bas" if low else "")
+    return [Reply("*Votre stock :*\n" + "\n".join(lines), doc=("stock", 0), caption=caption)]
 
 
 async def resend_receipt(ctx: Ctx, a: s.ReceiptRequest) -> list[Reply]:
@@ -711,7 +722,31 @@ async def reminder_for(ctx: Ctx, c: Contact) -> Reply:
         digits = "".join(ch for ch in c.phone if ch.isdigit())
         link = f"https://wa.me/{digits}?text={quote(message)}"
     intro = "Voici le message prêt à envoyer :" if link else "Voici le message à envoyer (pas de numéro enregistré) :"
-    return Reply(f"{intro}\n\n{message}", link=link)
+    text = f"{intro}\n\n{message}"
+    caption = f"Le rappel pour {c.name}, à transférer avec ce message :\n\n{message}"
+    return Reply(text, link=link, doc=("rappel", c.id), caption=caption)
+
+
+async def customer_statement(ctx: Ctx, a: s.CustomerName) -> list[Reply]:
+    """Everything a customer bought on credit and paid, drawn by the router as a statement."""
+    matches = await queries.find_contacts(ctx.session, ctx.shop.id, a.name, ContactKind.CUSTOMER)
+    if len(matches) != 1:
+        return [Reply(f"Le relevé de quel client ? Je ne trouve pas « {a.name} » avec certitude.")]
+    c = matches[0]
+    entries = await ledger.contact_entries(ctx.session, shop_id=ctx.shop.id, contact_id=c.id)
+    if not entries:
+        return [Reply(f"{c.name} n'a ni crédit ni paiement noté.")]
+    balance = sum(e.debt_delta for e in entries)
+    rows = [
+        f"{e.created_at:%d/%m} {'+' if e.debt_delta > 0 else '−'} {money(abs(e.debt_delta))}"
+        for e in entries[-STATEMENT_ROWS:]
+    ]
+    tail = f"Solde dû : *{money(balance)} FCFA*" if balance > 0 else "Compte soldé ✅"
+    text = f"*Relevé de {c.name}*\n" + "\n".join(rows) + f"\n\n{tail}"
+    return [Reply(text, doc=("releve", c.id), caption=f"Relevé de {c.name} · {tail}")]
+
+
+STATEMENT_ROWS = 14
 
 
 HANDLERS = {
@@ -731,6 +766,7 @@ HANDLERS = {
     "summary": summary,
     "stock_levels": stock_levels,
     "draft_reminder": draft_reminder,
+    "customer_statement": customer_statement,
     "resend_receipt": resend_receipt,
     "shelf_photo": shelf_photo,
     "create_logo": create_logo,
@@ -753,13 +789,21 @@ async def apply_pending(ctx: Ctx, pending: PendingAction) -> Applied:
             ref = p.get("reference")
             if ref and await _reference_seen(ctx, ref):
                 return Applied(Reply(f"Ce paiement ({ref}) était déjà noté."))
-            await ledger.record_entry(
+            entry = await ledger.record_entry(
                 ctx.session, shop_id=sid, kind=EntryKind.PAYMENT_RECEIVED, amount=p["amount"], contact_id=contact.id,
                 source=p.get("source") or EntrySource.TEXT, payment_reference=ref, created_by=uid,
             )  # fmt: skip
             left = await ledger.contact_balance(ctx.session, shop_id=sid, contact_id=contact.id)
             tail = f"Il reste {money(left)} FCFA à payer." if left > 0 else "Sa dette est soldée. ✅"
-            return Applied(Reply(f"C'est noté. {contact.name} a payé {money(p['amount'])} FCFA. {tail}"))
+            quittance = None
+            if left <= 0 and left + p["amount"] > 0:  # this payment cleared a real debt
+                quittance = Reply(
+                    f"{contact.name} ne doit plus rien.", doc=("quittance", entry.id),
+                    caption=f"Quittance pour {contact.name}. Transférez-la à votre client ↗",
+                )  # fmt: skip
+            return Applied(
+                Reply(f"C'est noté. {contact.name} a payé {money(p['amount'])} FCFA. {tail}"), extra=quittance
+            )
         if kind == "supplier_debt":
             contact = await _party_contact(ctx, p["party"], ContactKind.SUPPLIER)
             due = date.fromisoformat(p["due_date"]) if p.get("due_date") else None

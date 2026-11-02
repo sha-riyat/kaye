@@ -210,6 +210,26 @@ async def lower_stock_if_tracked(session: AsyncSession, shop_id: int, name: str,
     return p
 
 
+async def quantities_sold(session: AsyncSession, shop_id: int, since: datetime) -> dict[str, int]:
+    """Units sold per product since a date, keyed like products are matched (reversals net out)."""
+    from app.db.models import Entry
+
+    query = select(Entry.lines, Entry.amount).where(
+        Entry.shop_id == shop_id, Entry.kind == "sale", Entry.created_at >= since
+    )
+    sold: dict[str, int] = {}
+    for lines, amount in (await session.exec(query)).all():
+        sign = -1 if amount < 0 else 1
+        for ln in lines:
+            key = _product_key(ln["product"])
+            sold[key] = sold.get(key, 0) + sign * ln["quantity"]
+    return sold
+
+
+def product_key(name: str) -> str:
+    return _product_key(name)
+
+
 async def tracked_products(session: AsyncSession, shop_id: int) -> list[Product]:
     query = select(Product).where(Product.shop_id == shop_id, col(Product.stock).is_not(None)).order_by(Product.name)
     return list((await session.exec(query)).all())

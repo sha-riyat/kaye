@@ -8,7 +8,7 @@
 {% block body %}
 <div class="row" style="font-size:18px"><span class="label">Dette avant paiement</span><span>{{ before | fcfa }} FCFA</span></div>
 <div class="ok"><span>Reçu · {{ method }}</span><span>{{ amount | fcfa }} FCFA</span></div>
-<div class="row" style="font-size:15px"><span class="label">Référence {{ method }}</span><span>{{ reference }}</span></div>
+{% if reference %}<div class="row" style="font-size:15px"><span class="label">Référence {{ method }}</span><span>{{ reference }}</span></div>{% endif %}
 <div class="rule"></div>
 <div class="band paid"><span class="label">Dette soldée</span><span class="amount display">0 FCFA</span></div>
 <p class="note">{{ shop.name }} confirme avoir reçu le paiement de {{ customer }}. Plus rien n'est dû. Merci !</p>

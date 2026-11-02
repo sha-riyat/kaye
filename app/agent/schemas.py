@@ -91,6 +91,12 @@ class CustomerName(BaseModel):
     name: str
 
 
+class StatementRequest(BaseModel):
+    """Statement of a customer's account: every credit purchase and payment, and what is left."""
+
+    name: str
+
+
 class ReceiptRequest(BaseModel):
     """Send again the receipt of the last sale, or of the last sale to this customer."""
 
