@@ -17,7 +17,7 @@ const designCanvas = {
 };
 
 export default defineConfig({
-  site: "https://kaye.vercel.app",
+  site: "https://kaye-app.vercel.app", // kaye.vercel.app belongs to another Vercel account
   integrations: [designCanvas],
   devToolbar: { enabled: false },
   i18n: {
