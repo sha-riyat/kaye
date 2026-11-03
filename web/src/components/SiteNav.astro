@@ -1,0 +1,35 @@
+---
+/** Top navigation. `tone` follows the band it sits on; `pill` draws it floating on cream. */
+import lockupCauri from "../assets/brand/lockup-cauri.svg";
+import lockupNight from "../assets/brand/lockup-night.svg";
+import { copy, type Lang } from "../i18n";
+
+interface Props {
+  lang?: Lang;
+  tone?: "nuit" | "cauri";
+  pill?: boolean;
+}
+const { lang = "fr", tone = "nuit", pill = false } = Astro.props;
+const t = copy[lang];
+const links = [
+  { href: `${t.home}#comment`, label: t.nav.how },
+  { href: `${t.home}#promesse`, label: t.nav.promise },
+  { href: t.privacy, label: t.nav.privacy },
+];
+const lockup = tone === "nuit" ? lockupCauri : lockupNight;
+---
+
+<nav
+  aria-label={t.nav.label}
+  class:list={[
+    "relative z-20 mx-auto flex items-center justify-between gap-4",
+    pill ? "max-w-[1120px] rounded-full bg-papier py-2 pr-2 pl-5 shadow-[0_1px_0_rgba(20,17,27,.05),0_10px_30px_rgba(20,17,27,.07)]" : "max-w-[1280px] px-6 py-6 @5xl:px-10",
+  ]}
+>
+  <a href={t.home} aria-label={t.nav.home} class="shrink-0"><img src={lockup.src} alt="Kayé" width="120" height="40" class="block h-8 w-auto" /></a>
+  <ul class:list={["m-0 hidden list-none items-center gap-8 p-0 text-[15px] font-medium @4xl:flex", tone === "nuit" ? "text-cauri" : "text-nuit"]}>
+    {links.map((l) => <li><a href={l.href} class="text-current no-underline opacity-85 hover:opacity-100">{l.label}</a></li>)}
+    <li><a href={t.other.href} lang={lang === "fr" ? "en" : "fr"} class="text-current no-underline opacity-85 hover:opacity-100">{lang === "fr" ? "EN" : "FR"}</a></li>
+  </ul>
+  <a href={t.wa} class:list={["btn min-h-11 px-5 text-[15px]", tone === "nuit" || pill ? "btn-sun" : "btn-night"]}>{t.nav.write}</a>
+</nav>

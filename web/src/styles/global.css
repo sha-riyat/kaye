@@ -66,6 +66,21 @@
     letter-spacing: -0.045em;
     line-height: 0.92;
   }
+  /* The brand book's headline voice: a light line that lands on a bold word (300 against 700). */
+  .display-light {
+    font-family: var(--font-display);
+    font-weight: 300;
+    letter-spacing: -0.05em;
+    line-height: 0.94;
+  }
+  .display-light b,
+  .display-light strong {
+    font-weight: 700;
+  }
+  /* The kente is a ribbon, not a wallpaper: a band on an edge, never under text. One 30 px row. */
+  .ribbon {
+    background: url("../assets/brand/pattern-kente.svg") 0 0 / 300px auto repeat;
+  }
   .eyebrow {
     font-size: 0.8125rem;
     font-weight: 700;

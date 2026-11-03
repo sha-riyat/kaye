@@ -1,0 +1,30 @@
+---
+/** The footer: a kente ribbon on its top edge, the lockup, the promise, the few links. */
+import lockup from "../assets/brand/lockup-cauri.svg";
+import { GITHUB } from "../site";
+import { copy, type Lang } from "../i18n";
+
+interface Props {
+  lang?: Lang;
+}
+const { lang = "fr" } = Astro.props;
+const t = copy[lang];
+---
+
+<footer class="bg-nuit text-gris-clair">
+  <div class="ribbon h-[30px]" aria-hidden="true"></div>
+  <div class="mx-auto flex max-w-[1280px] flex-col gap-8 px-6 py-14 @4xl:flex-row @4xl:items-end @4xl:justify-between @5xl:px-10">
+    <div class="flex flex-col gap-4">
+      <img src={lockup.src} alt="Kayé" width="150" height="50" class="h-11 w-auto self-start" />
+      <p class="m-0 font-display text-[1.5rem] font-light tracking-tight text-cauri">{t.footer.promise[0]}<b class="font-bold">{t.footer.promise[1]}</b></p>
+    </div>
+    <div class="flex flex-col gap-3 text-[15px] @4xl:items-end">
+      <span class="flex flex-wrap gap-6">
+        <a href={t.privacy} class="text-cauri">{t.nav.privacy}</a>
+        <a href={t.other.href} lang={lang === "fr" ? "en" : "fr"} class="text-cauri">{t.other.label}</a>
+        <a href={GITHUB} class="text-cauri">GitHub</a>
+      </span>
+      <span>{t.footer.credits}</span>
+    </div>
+  </div>
+</footer>

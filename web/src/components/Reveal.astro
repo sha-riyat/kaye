@@ -1,0 +1,34 @@
+---
+/** Elements marked `data-reveal` rise into place the first time they come on screen, in the
+ * order of their `--i`. Include once per page; nothing moves under reduced motion. */
+---
+
+<style is:global>
+  [data-reveal] {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  [data-reveal][data-seen] {
+    opacity: 1;
+    transform: none;
+    transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out);
+    transition-delay: calc(var(--i, 0) * 90ms);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-reveal] { opacity: 1; transform: none; }
+  }
+</style>
+
+<script>
+  const seen = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        e.target.setAttribute("data-seen", "");
+        seen.unobserve(e.target);
+      }
+    },
+    { rootMargin: "0px 0px -8% 0px" },
+  );
+  document.querySelectorAll("[data-reveal]").forEach((el) => seen.observe(el));
+</script>

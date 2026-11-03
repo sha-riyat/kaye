@@ -1,0 +1,17 @@
+---
+/** One message of a WhatsApp conversation, drawn as in the brand book's « Une journée » board:
+ * the merchant in green on the right, Kayé on paper on the left. */
+interface Props {
+  from: "said" | "kaye";
+  class?: string;
+}
+const { from, class: cls = "" } = Astro.props;
+---
+
+<p
+  class:list={[
+    "m-0 max-w-[30rem] px-4 py-3 text-[15px] leading-[1.45] text-nuit shadow-[0_1px_0_rgba(20,17,27,.08)] @3xl:text-[16px]",
+    from === "said" ? "ml-auto rounded-[18px_4px_18px_18px] bg-[#d9fdd3]" : "rounded-[4px_18px_18px_18px] bg-papier",
+    cls,
+  ]}
+><slot /></p>

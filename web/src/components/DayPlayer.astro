@@ -1,0 +1,117 @@
+---
+/** A shop's day from the brand book, any trade, played as one short piece of motion instead of a long scroll:
+ * the clock turns, the sun moves along the day, and each moment's message, Kayé's answer and its
+ * ticket come in on the same stage. It runs only while on screen; the hours can be picked by hand,
+ * and under reduced motion nothing advances on its own. */
+import { Image } from "astro:assets";
+import Bubble from "./Bubble.astro";
+import recu from "../assets/tickets/recu.png";
+import quittance from "../assets/tickets/quittance.png";
+import stock from "../assets/tickets/stock.png";
+import bilan from "../assets/tickets/bilan.png";
+import { copy, type Lang } from "../i18n";
+
+interface Props {
+  lang?: Lang;
+}
+const docs = [undefined, recu, undefined, quittance, stock, bilan];
+const day = copy[Astro.props.lang ?? "fr"].day.steps.map((s, i) => ({ ...s, alt: "alt" in s ? s.alt : "", doc: docs[i] }));
+---
+
+<div class="day grid gap-10 @4xl:grid-cols-[1fr_1.1fr] @4xl:items-center @4xl:gap-16" data-day>
+  <div class="flex flex-col gap-6">
+    <div class="relative h-[clamp(5rem,13cqi,9.5rem)] overflow-hidden" aria-live="polite">
+      {day.map((m, i) => (
+        <p class="day-clock display absolute inset-0 m-0 text-[clamp(5rem,13cqi,9.5rem)] leading-none text-cauri" data-step={i} data-on={i === 0 ? "" : undefined}>
+          {m.h}<span class="sr-only"> · {m.k}</span>
+        </p>
+      ))}
+    </div>
+    <div class="relative h-6">
+      {day.map((m, i) => (
+        <span class="day-label eyebrow absolute inset-0 text-solaire" data-step={i} data-on={i === 0 ? "" : undefined} aria-hidden="true">{m.k}</span>
+      ))}
+    </div>
+
+    <!-- The day, from morning to night: the sun travels along it. -->
+    <div class="relative mt-4 pt-6">
+      <span class="absolute inset-x-0 top-[33px] h-px bg-nuit-line" aria-hidden="true"></span>
+      <span class="day-sun absolute top-[24px] -ml-[9px] h-[18px] w-[18px] rounded-full bg-solaire shadow-[0_0_0_6px_rgba(255,122,31,.18)]" aria-hidden="true"></span>
+      <div class="relative flex justify-between">
+        {day.map((m, i) => (
+          <button type="button" class="day-tick flex flex-col items-center gap-3 pt-6 text-[13px] font-semibold text-gris-clair" data-pick={i} aria-label={`${m.h}, ${m.k}`}>
+            {m.h}
+          </button>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  <!-- The stage: one WhatsApp thread, rewritten at each hour. -->
+  <div class="relative h-[470px] overflow-hidden rounded-[28px] bg-[#efe6d8] p-5 @3xl:h-[440px] @3xl:p-7">
+    <div class="ribbon absolute inset-x-0 top-0 h-[30px]" aria-hidden="true"></div>
+    {day.map((m, i) => (
+      <div class="day-scene absolute inset-x-5 top-[54px] bottom-5 flex flex-col gap-3 @3xl:inset-x-7 @3xl:top-[62px]" data-step={i} data-on={i === 0 ? "" : undefined}>
+        <Bubble from="said" class="day-in">{m.said}</Bubble>
+        <Bubble from="kaye" class="day-in [--d:1]">{m.kaye}</Bubble>
+        {m.doc && (
+          <Image src={m.doc} alt={m.alt} width={300} class="day-in day-doc mt-1 w-[150px] self-start rounded-md shadow-lift [--d:2] @3xl:w-[170px]" />
+        )}
+      </div>
+    ))}
+  </div>
+</div>
+
+<style>
+  .day-clock, .day-label { opacity: 0; transform: translateY(40%); }
+  .day-clock[data-on], .day-label[data-on] { opacity: 1; transform: none; transition: opacity 280ms var(--ease-out), transform 280ms var(--ease-out); }
+
+  .day-scene { visibility: hidden; }
+  .day-scene[data-on] { visibility: visible; }
+  .day-in { opacity: 0; transform: translateY(10px) scale(.98); transform-origin: bottom left; }
+  .day-scene[data-on] .day-in {
+    opacity: 1; transform: none;
+    transition: opacity 260ms var(--ease-out), transform 260ms var(--ease-out);
+    transition-delay: calc(var(--d, 0) * 650ms);
+  }
+  .day-scene[data-on] .day-doc { transform: rotate(-2.5deg); }
+
+  .day-sun { left: 0; transition: left 280ms var(--ease-out); }
+  .day-tick[data-on] { color: var(--color-cauri); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .day-clock, .day-label, .day-in, .day-sun { transition: none !important; }
+  }
+</style>
+
+<script>
+  const HOLD = 4200; // time on each hour, long enough to read Kayé's answer
+
+  document.querySelectorAll<HTMLElement>("[data-day]").forEach((root) => {
+    const steps = root.querySelectorAll<HTMLElement>("[data-step]");
+    const ticks = root.querySelectorAll<HTMLElement>("[data-pick]");
+    const sun = root.querySelector<HTMLElement>(".day-sun")!;
+    const n = ticks.length;
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let at = 0;
+    let timer = 0;
+
+    const show = (i: number) => {
+      at = i;
+      steps.forEach((el) => el.toggleAttribute("data-on", Number(el.dataset.step) === i));
+      ticks.forEach((el, j) => el.toggleAttribute("data-on", j === i));
+      // the sun sits over the tick of the hour
+      const t = ticks[i];
+      sun.style.left = `${t.offsetLeft + t.offsetWidth / 2}px`;
+    };
+    const run = () => {
+      clearInterval(timer);
+      if (!still) timer = window.setInterval(() => show((at + 1) % n), HOLD);
+    };
+
+    ticks.forEach((t, i) => t.addEventListener("click", () => { show(i); run(); }));
+    new IntersectionObserver(([e]) => (e.isIntersecting ? run() : clearInterval(timer))).observe(root);
+    addEventListener("resize", () => show(at));
+    show(0);
+  });
+</script>

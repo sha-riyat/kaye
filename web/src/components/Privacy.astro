@@ -1,0 +1,97 @@
+---
+/** The privacy policy, in plain words: what Kayé keeps, where, who sees it, how to erase it. Every
+ * statement matches how the app works (see the README's « Confidentialité et sécurité »). */
+import SiteNav from "./SiteNav.astro";
+import SiteFooter from "./SiteFooter.astro";
+import { PHONE } from "../site";
+import type { Lang } from "../i18n";
+
+interface Props {
+  lang?: Lang;
+}
+const { lang = "fr" } = Astro.props;
+
+const text = {
+  fr: {
+    a: "Les comptes d'une boutique",
+    b: "ne regardent qu'elle.",
+    updated: "Mis à jour le 3 novembre 2026",
+    intro: "Kayé est un assistant de gestion pour commerçants, dans WhatsApp. Cette page dit, simplement, ce qu'il garde, où, qui le voit et comment tout effacer.",
+    sections: [
+      ["Ce que Kayé garde", [
+        "Ce que vous lui dites ou envoyez pour tenir vos comptes : ventes, crédits, paiements, stock, dépenses, fournisseurs, et les noms de clients que vous citez.",
+        "Les notes vocales, photos et documents que vous lui envoyez, et les reçus, bilans et relevés qu'il prépare.",
+        "Votre numéro WhatsApp, le nom de votre boutique et, si vous l'envoyez, votre logo.",
+      ]],
+      ["À quoi ça sert", [
+        "Uniquement à tenir les comptes de votre boutique et à vous répondre.",
+        "Vos données ne servent jamais à entraîner des modèles d'intelligence artificielle. Pas de publicité, pas de revente.",
+        "Kayé n'écrit jamais à vos clients : il prépare le message, c'est vous qui l'envoyez.",
+      ]],
+      ["Où et qui y a accès", [
+        "Chaque numéro WhatsApp est rattaché à une seule boutique, et chaque demande ne voit que cette boutique.",
+        "Les écritures sont dans une base Supabase protégée ligne par ligne ; les vocaux, photos et documents sont dans un espace de stockage privé (Cloudflare R2).",
+        "Les messages passent par WhatsApp (Meta). Pour comprendre une note vocale, une photo ou une phrase, Kayé utilise les modèles de Meta.",
+      ]],
+      ["Tout effacer", [
+        "Écrivez « supprimer mes données ». Après votre « Oui », Kayé efface les écritures, les utilisateurs et les fichiers de la boutique.",
+      ]],
+      ["Mode démo", [
+        "Kayé est en démonstration pour le Meta Global AI Developer Hackathon. Utilisez des données fictives.",
+      ]],
+    ],
+    contact: ["Une question ? Écrivez à Kayé au ", "."],
+  },
+  en: {
+    a: "A shop's books",
+    b: "are its own business.",
+    updated: "Updated on 3 November 2026",
+    intro: "Kayé is a bookkeeping assistant for shopkeepers, in WhatsApp. This page says, plainly, what it keeps, where, who sees it and how to erase it all.",
+    sections: [
+      ["What Kayé keeps", [
+        "What you tell it or send it to keep your books: sales, credit, payments, stock, expenses, suppliers, and the customer names you mention.",
+        "The voice notes, photos and documents you send, and the receipts, summaries and statements it prepares.",
+        "Your WhatsApp number, your shop's name and, if you send it, your logo.",
+      ]],
+      ["What it's for", [
+        "Only keeping your shop's books and answering you.",
+        "Your data is never used to train AI models. No ads, no reselling.",
+        "Kayé never messages your customers: it prepares the message, you send it.",
+      ]],
+      ["Where, and who can see it", [
+        "Each WhatsApp number belongs to one shop, and every request only sees that shop.",
+        "Records live in a Supabase database protected row by row; voice notes, photos and documents live in private storage (Cloudflare R2).",
+        "Messages go through WhatsApp (Meta). To understand a voice note, a photo or a sentence, Kayé uses Meta's models.",
+      ]],
+      ["Erase everything", [
+        "Write « supprimer mes données » (delete my data). After your “Yes”, Kayé erases the shop's records, users and files.",
+      ]],
+      ["Demo mode", [
+        "Kayé is a demo for the Meta Global AI Developer Hackathon. Use made-up data.",
+      ]],
+    ],
+    contact: ["A question? Message Kayé at ", "."],
+  },
+}[lang];
+---
+
+<div class="bg-papier text-nuit">
+  <div class="bg-nuit"><SiteNav lang={lang} tone="nuit" /></div>
+  <main class="mx-auto flex max-w-[760px] flex-col gap-12 px-6 py-20 @5xl:py-28">
+    <header class="flex flex-col gap-5">
+      <h1 class="display-light m-0 text-[clamp(2.4rem,5cqi,4rem)]">{text.a}<br /><b class="text-solaire">{text.b}</b></h1>
+      <p class="m-0 text-[14px] text-gris">{text.updated}</p>
+      <p class="m-0 text-[1.1875rem] leading-relaxed text-gris">{text.intro}</p>
+    </header>
+    {(text.sections as [string, string[]][]).map(([title, lines]) => (
+      <section class="flex flex-col gap-4 border-t-2 border-nuit pt-6">
+        <h2 class="m-0 font-display text-[1.625rem] font-bold tracking-tight">{title}</h2>
+        <ul class="m-0 flex flex-col gap-3 pl-5 text-[1.0625rem] leading-relaxed">
+          {lines.map((l) => <li>{l}</li>)}
+        </ul>
+      </section>
+    ))}
+    <p class="m-0 border-t-2 border-solaire pt-6 text-[1.0625rem]">{text.contact[0]}<b class="num">{PHONE}</b>{text.contact[1]}</p>
+  </main>
+  <SiteFooter lang={lang} />
+</div>

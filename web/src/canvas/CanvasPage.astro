@@ -29,7 +29,7 @@ import { ITEMS } from "./registry";
                 <span class="item-status" aria-live="polite"></span>
               </div>
               <div class="item-preview @container" style={`width:${item.w}px;height:${item.h}px`}>
-                <Component />
+                <Component {...item.props} />
               </div>
             </section>
           );

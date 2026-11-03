@@ -1,0 +1,52 @@
+---
+/** The headline's proof, in three seconds and on a loop: a voice note goes in, Kayé answers with
+ * the figures, and the receipt comes out. Plays only while on screen; still under reduced motion. */
+import { Image } from "astro:assets";
+import recu from "../assets/tickets/recu.png";
+import { copy, type Lang } from "../i18n";
+
+interface Props {
+  lang?: Lang;
+}
+const t = copy[Astro.props.lang ?? "fr"].proof;
+---
+
+<div class="proof flex w-[min(340px,100%)] flex-col gap-2.5" data-proof aria-label={t.label}>
+  <p class="proof-1 m-0 ml-auto flex items-center gap-3 rounded-[18px_4px_18px_18px] bg-[#d9fdd3] px-4 py-3 text-nuit shadow-lift">
+    <span class="grid h-8 w-8 place-items-center rounded-full bg-lagune text-[13px] text-papier" aria-hidden="true">▶</span>
+    <span class="flex h-6 items-center gap-[3px]" aria-hidden="true">
+      {[8, 16, 11, 20, 14, 22, 9, 17, 12, 19, 7, 15, 10, 18, 8].map((h, i) => (
+        <i class="proof-bar block w-[3px] rounded-full bg-lagune/70" style={`height:${h}px;--b:${i}`}></i>
+      ))}
+    </span>
+    <span class="text-[13px] text-gris">0:07</span>
+  </p>
+  <p class="proof-2 m-0 max-w-[290px] rounded-[4px_18px_18px_18px] bg-papier px-4 py-3 text-[15px] leading-[1.45] text-nuit shadow-lift">
+    {t.reply[0]}<b>{t.reply[1]}</b>{t.reply[2]}<b class="text-laterite">{t.reply[3]}</b>{t.reply[4]}
+  </p>
+  <Image src={recu} alt={t.alt} width={320} class="proof-3 w-[150px] rounded-md shadow-lift" />
+</div>
+
+<style>
+  .proof-1 { animation: proof-1 9s var(--ease-out) infinite both paused; }
+  .proof-2 { animation: proof-2 9s var(--ease-out) infinite both paused; }
+  .proof-3 { animation: proof-3 9s var(--ease-out) infinite both paused; transform-origin: top left; }
+  .proof[data-play] :is(.proof-1, .proof-2, .proof-3, .proof-bar) { animation-play-state: running; }
+  .proof-bar { animation: proof-bar 900ms ease-in-out infinite alternate paused; animation-delay: calc(var(--b) * -70ms); }
+
+  @keyframes proof-1 { 0% { opacity: 0; transform: translateY(10px); } 4%, 88% { opacity: 1; transform: none; } 94%, 100% { opacity: 0; transform: none; } }
+  @keyframes proof-2 { 0%, 16% { opacity: 0; transform: translateY(10px); } 20%, 88% { opacity: 1; transform: none; } 94%, 100% { opacity: 0; transform: none; } }
+  @keyframes proof-3 { 0%, 32% { opacity: 0; transform: translateY(14px) rotate(0); } 37%, 88% { opacity: 1; transform: rotate(-3deg); } 94%, 100% { opacity: 0; transform: rotate(-3deg); } }
+  @keyframes proof-bar { from { transform: scaleY(.45); } to { transform: none; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .proof-1, .proof-2, .proof-3, .proof-bar { animation: none !important; opacity: 1; }
+    .proof-3 { transform: rotate(-3deg); }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>("[data-proof]").forEach((el) =>
+    new IntersectionObserver(([e]) => el.toggleAttribute("data-play", e.isIntersecting)).observe(el),
+  );
+</script>

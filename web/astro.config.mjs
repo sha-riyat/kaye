@@ -2,13 +2,16 @@
 import { defineConfig } from "astro/config";
 import tailwindcss from "@tailwindcss/vite";
 
-/** The design canvas is a working tool: it exists under `astro dev` only, never in the built site. */
+/** The design canvas and the share-card source are working tools: they exist under `astro dev`
+ * only, never in the built site. `/og` is captured once into public/og.png (see OgCard.astro). */
 const designCanvas = {
   name: "kaye-design-canvas",
   hooks: {
     /** @param {{ command: string, injectRoute: (route: { pattern: string, entrypoint: string }) => void }} options */
     "astro:config:setup": ({ command, injectRoute }) => {
-      if (command === "dev") injectRoute({ pattern: "/canvas", entrypoint: "./src/canvas/CanvasPage.astro" });
+      if (command !== "dev") return;
+      injectRoute({ pattern: "/canvas", entrypoint: "./src/canvas/CanvasPage.astro" });
+      injectRoute({ pattern: "/og", entrypoint: "./src/canvas/OgCard.astro" });
     },
   },
 };
@@ -16,6 +19,7 @@ const designCanvas = {
 export default defineConfig({
   site: "https://kaye.vercel.app",
   integrations: [designCanvas],
+  devToolbar: { enabled: false },
   i18n: {
     locales: ["fr", "en"],
     defaultLocale: "fr",

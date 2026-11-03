@@ -1,0 +1,61 @@
+---
+/** The promise, shown rather than told: a spoken sentence becomes a line of the ledger. The voice
+ * note plays, the line writes itself in, the check lands; then again. Plays only while on screen;
+ * still under reduced motion. */
+import { copy, type Lang } from "../i18n";
+
+interface Props {
+  lang?: Lang;
+}
+const lang = Astro.props.lang ?? "fr";
+const t = copy[lang].promise;
+const amount = (n: number) => n.toLocaleString(lang === "fr" ? "fr-FR" : "en-US").replace(/ | /g, " ");
+---
+
+<div class="sn relative flex flex-col gap-5" data-sn aria-label={t.label}>
+  <div class="sn-said flex items-center gap-3 self-start rounded-[18px_18px_18px_4px] bg-[#d9fdd3] px-4 py-3 text-nuit shadow-warm">
+    <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-lagune text-[13px] text-papier" aria-hidden="true">▶</span>
+    <span class="text-[16px] @3xl:text-[17px]">{t.said}</span>
+  </div>
+
+  <svg class="sn-arrow ml-8 h-10 w-6 text-solaire" viewBox="0 0 24 40" fill="none" aria-hidden="true">
+    <path d="M12 2v32M4 26l8 9 8-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+  </svg>
+
+  <div class="overflow-hidden rounded-[20px] bg-cauri shadow-warm">
+    <div class="flex items-center justify-between border-b border-trait px-5 py-3 text-[13px] font-semibold tracking-[0.12em] text-gris uppercase">
+      <span>{t.ledger[0]}</span><span>{t.ledger[1]}</span>
+    </div>
+    {([["Edem", 7500, false], ["Ama", 8000, true], ["Yao", 4000, false]] as const).map(([who, due, live]) => (
+      <div class:list={["flex items-center gap-4 border-b border-trait px-5 py-4 last:border-0", live && "sn-line"]}>
+        <span class="font-display text-[1.25rem] font-semibold text-nuit">{who}</span>
+        <span class="ml-auto font-display text-[1.25rem] font-bold text-laterite">{amount(due)} FCFA</span>
+        <span class:list={["grid h-7 w-7 place-items-center rounded-full bg-lagune text-[14px] text-papier", live && "sn-check"]} aria-hidden="true">✓</span>
+      </div>
+    ))}
+  </div>
+</div>
+
+<style>
+  .sn-said, .sn-arrow, .sn-line, .sn-check { animation: 7s var(--ease-out) infinite both paused; }
+  .sn-said { animation-name: sn-said; }
+  .sn-arrow { animation-name: sn-arrow; }
+  .sn-line { animation-name: sn-line; }
+  .sn-check { animation-name: sn-check; animation-timing-function: var(--ease-spring); }
+  [data-sn][data-play] :is(.sn-said, .sn-arrow, .sn-line, .sn-check) { animation-play-state: running; }
+
+  @keyframes sn-said { 0% { opacity: 0; transform: translateY(10px); } 5%, 90% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; } }
+  @keyframes sn-arrow { 0%, 14% { opacity: 0; transform: translateY(-8px); } 20%, 90% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; } }
+  @keyframes sn-line { 0%, 22% { clip-path: inset(0 100% 0 0); background: transparent; } 34% { clip-path: inset(0 0 0 0); background: #fff1e6; } 60%, 100% { clip-path: inset(0 0 0 0); background: transparent; } }
+  @keyframes sn-check { 0%, 34% { opacity: 0; transform: scale(0.4); } 40%, 92% { opacity: 1; transform: none; } 100% { opacity: 1; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sn-said, .sn-arrow, .sn-line, .sn-check { animation: none !important; }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>("[data-sn]").forEach((el) =>
+    new IntersectionObserver(([e]) => el.toggleAttribute("data-play", e.isIntersecting)).observe(el),
+  );
+</script>

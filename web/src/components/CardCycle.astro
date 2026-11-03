@@ -1,0 +1,37 @@
+---
+/** Makes a list of cards take turns: while the list is on screen, one card at a time lifts and its
+ * icon turns towards the reader, as if that part of the shop were speaking. Mark the list with
+ * `data-cycle`, each card's inner block with `.cyc-card` and its icon with `.cyc-icon`. Hover does
+ * the same. Include once per page; under reduced motion only hover moves. */
+---
+
+<style is:global>
+  .cyc-card { transition: transform 280ms var(--ease-out), box-shadow 280ms var(--ease-out); }
+  .cyc-icon { transition: transform 280ms var(--ease-spring); }
+  [data-cycle] > li[data-live] .cyc-card, [data-cycle] > li:hover .cyc-card {
+    transform: translateY(-8px) rotate(-1deg);
+    box-shadow: 0 18px 40px rgba(20, 17, 27, 0.18);
+  }
+  [data-cycle] > li[data-live] .cyc-icon, [data-cycle] > li:hover .cyc-icon { transform: scale(1.1) rotate(-8deg); }
+</style>
+
+<script>
+  const STEP = 1500;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  document.querySelectorAll<HTMLElement>("[data-cycle]").forEach((list) => {
+    if (still) return;
+    const cards = [...list.children] as HTMLElement[];
+    let at = -1;
+    let timer = 0;
+    const next = () => {
+      cards[at]?.removeAttribute("data-live");
+      at = (at + 1) % cards.length;
+      cards[at].setAttribute("data-live", "");
+    };
+    new IntersectionObserver(([e]) => {
+      clearInterval(timer);
+      if (e.isIntersecting) timer = window.setInterval(next, STEP);
+    }).observe(list);
+  });
+</script>

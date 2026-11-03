@@ -1,0 +1,188 @@
+---
+/**
+ * The landing page, chosen on the design canvas: « Dites-le. Kayé le note. » A shop's day runs
+ * underneath, never announced. Cover with its proof, the notebook, the day played as motion, the
+ * promise shown, the whole shop in the merchant's words, the four values, the call. One component
+ * for both languages; every word comes from i18n.ts.
+ */
+import { Image } from "astro:assets";
+import SiteNav from "./SiteNav.astro";
+import SiteFooter from "./SiteFooter.astro";
+import DayPlayer from "./DayPlayer.astro";
+import HeroProof from "./HeroProof.astro";
+import Reveal from "./Reveal.astro";
+import CardCycle from "./CardCycle.astro";
+import SaidNoted from "./SaidNoted.astro";
+import cover from "../assets/photos/commercant-telephone.jpg";
+import cahier from "../assets/photos/commercant-cahier.jpg";
+import boutiquier from "../assets/photos/boutiquier-comptoir.jpg";
+import iStock from "../assets/brand/icons/stock.svg";
+import iVente from "../assets/brand/icons/vente.svg";
+import iDepense from "../assets/brand/icons/depense.svg";
+import iPaiement from "../assets/brand/icons/mobile-money.svg";
+import iBilan from "../assets/brand/icons/bilan.svg";
+import iCredit from "../assets/brand/icons/credit.svg";
+import iFournisseur from "../assets/brand/icons/fournisseur.svg";
+import iEquipe from "../assets/brand/icons/equipe.svg";
+import iRelance from "../assets/brand/icons/relance.svg";
+import iRecu from "../assets/brand/icons/recu.svg";
+import qr from "../assets/brand/qr-whatsapp-nuit.svg";
+import symbol from "../assets/brand/symbol-night.svg";
+import { PHONE } from "../site";
+import { copy, type Lang } from "../i18n";
+
+interface Props {
+  lang?: Lang;
+}
+const { lang = "fr" } = Astro.props;
+const t = copy[lang];
+
+const shopLook = [
+  { icon: iVente, tone: "paper" }, { icon: iCredit, tone: "paper" }, { icon: iPaiement, tone: "paper" },
+  { icon: iStock, tone: "sun" }, { icon: iDepense, tone: "night" }, { icon: iFournisseur, tone: "night" },
+  { icon: iEquipe, tone: "sun" }, { icon: iBilan, tone: "paper" }, { icon: iRelance, tone: "paper" },
+  { icon: iRecu, tone: "paper" },
+];
+const shop = t.shop.items.map(([title, quote], i) => ({ title, quote, ...shopLook[i] }));
+---
+
+<div class="bg-nuit text-cauri">
+  <Reveal />
+  <CardCycle />
+
+  <!-- Cover: the brand book's cover, made a page. -->
+  <header class="relative overflow-hidden">
+    <div class="relative z-10 @5xl:w-[56%]"><SiteNav lang={lang} tone="nuit" /></div>
+    <div class="relative grid @5xl:min-h-[760px] @5xl:grid-cols-[56%_44%]">
+      <div class="relative z-10 flex flex-col gap-8 px-6 pt-8 pb-14 @5xl:px-10 @5xl:pt-16 @5xl:pb-20">
+        <span class="eyebrow text-gris-clair">{t.hero.where}</span>
+        <h1 class="display-light m-0 text-[clamp(3.4rem,9cqi,8.4rem)]">{t.hero.a}<br /><b class="text-solaire">{t.hero.b}</b></h1>
+        <p class="m-0 max-w-[33rem] text-[1.1875rem] leading-relaxed text-lilas @3xl:text-[1.375rem]">{t.hero.sub}</p>
+        <div class="flex flex-wrap items-center gap-3">
+          <a href={t.wa} class="btn btn-sun">{t.nav.write}</a>
+        </div>
+        <dl class="m-0 mt-auto grid gap-6 pt-6 @3xl:grid-cols-3">
+          {t.hero.three.map(([title, line], i) => (
+            <div class="flex flex-col gap-1.5 border-t-2 border-solaire pt-4" data-reveal style={`--i:${i}`}>
+              <dt class="font-display text-[1.5rem] font-bold tracking-tight">{title}</dt>
+              <dd class="m-0 text-[15px] text-gris-clair">{line}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </div>
+    <div class="relative h-[640px] @5xl:absolute @5xl:inset-y-0 @5xl:right-0 @5xl:h-auto @5xl:w-[44%]">
+      <Image src={cover} alt={t.hero.alt} widths={[480, 800, 1200]} sizes="(min-width: 1024px) 44vw, 100vw" class="absolute inset-0 h-full w-full object-cover object-[50%_10%] @5xl:object-center" loading="eager" />
+      <div class="ribbon absolute inset-y-0 left-0 hidden w-[30px] @5xl:block" aria-hidden="true"></div>
+      <div class="ribbon absolute inset-x-0 top-0 h-[30px] @5xl:hidden" aria-hidden="true"></div>
+      <div class="absolute inset-x-6 bottom-6 @5xl:inset-x-auto @5xl:bottom-12 @5xl:left-16"><HeroProof lang={lang} /></div>
+    </div>
+  </header>
+
+  <!-- The notebook. -->
+  <section class="grid bg-cauri text-nuit @5xl:grid-cols-[40%_60%]">
+    <div class="relative h-[420px] @5xl:h-auto">
+      <Image src={cahier} alt={t.notebook.alt} widths={[480, 800]} sizes="(min-width: 1024px) 40vw, 100vw" class="absolute inset-0 h-full w-full object-cover" />
+    </div>
+    <div class="flex flex-col gap-10 px-6 py-20 @5xl:px-20 @5xl:py-32">
+      <h2 class="display-light m-0 text-[clamp(2.4rem,4.6cqi,4.4rem)]" data-reveal>{t.notebook.a}<br />{t.notebook.b}<b class="text-laterite">{t.notebook.c}</b></h2>
+      <div class="grid gap-8 text-[1.125rem] leading-relaxed text-gris @4xl:grid-cols-2">
+        <p class="m-0" data-reveal style="--i:1">{t.notebook.p1}</p>
+        <p class="m-0" data-reveal style="--i:2">{t.notebook.p2}</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- The day, as motion. -->
+  <section id="comment" class="mx-auto flex max-w-[1280px] scroll-mt-4 flex-col gap-12 px-6 py-24 @5xl:px-10 @5xl:py-28">
+    <h2 class="display-light m-0 text-[clamp(2.4rem,5.4cqi,4.6rem)]">{t.day.a}<br /><b class="text-solaire">{t.day.b}</b></h2>
+    <DayPlayer lang={lang} />
+  </section>
+
+  <!-- The promise, shown. -->
+  <section id="promesse" class="bg-papier text-nuit">
+    <div class="mx-auto grid max-w-[1280px] gap-14 px-6 py-24 @5xl:grid-cols-[1.1fr_1fr] @5xl:items-center @5xl:gap-24 @5xl:px-10 @5xl:py-28">
+      <div class="flex flex-col gap-10">
+        <h2 class="display-light m-0 text-[clamp(2.6rem,5.4cqi,4.6rem)]" data-reveal>{t.promise.a}<br /><b class="text-solaire">{t.promise.b}</b></h2>
+        <div class="max-w-[30rem]" data-reveal style="--i:1"><SaidNoted lang={lang} /></div>
+      </div>
+      <dl class="m-0 flex flex-col">
+        {t.promise.items.map(([term, text], i) => (
+          <div class:list={["flex flex-col gap-3 border-t-2 py-7", i === 2 ? "border-solaire pb-0" : "border-nuit"]} data-reveal>
+            <dt class="eyebrow text-gris">{term}</dt>
+            <dd class:list={["m-0", i === 2 ? "text-[1.125rem] leading-relaxed" : "font-display text-[1.875rem] leading-[1.18] font-semibold tracking-tight"]}>{text}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  </section>
+
+  <!-- The whole shop, in the merchant's words. -->
+  <section class="bg-cauri text-nuit">
+    <div class="mx-auto flex max-w-[1280px] flex-col gap-12 px-6 py-24 @5xl:px-10 @5xl:py-32">
+      <div class="grid gap-6 @5xl:grid-cols-[1.4fr_1fr] @5xl:items-end">
+        <h2 class="display-light m-0 text-[clamp(2.4rem,4.2cqi,3.6rem)]" data-reveal>{t.shop.a}<br /><b>{t.shop.b}</b></h2>
+        <p class="m-0 text-[1.125rem] leading-relaxed text-gris" data-reveal>{t.shop.p}</p>
+      </div>
+      <ul class="m-0 grid list-none gap-3.5 p-0 @3xl:grid-cols-2 @5xl:grid-cols-5" data-cycle>
+        {shop.map((f, i) => (
+          <li data-reveal style={`--i:${i % 5}`} class="flex">
+            <div class:list={[
+              "cyc-card flex min-h-[230px] w-full flex-col gap-4 rounded-[24px] p-6",
+              f.tone === "sun" ? "bg-solaire" : f.tone === "night" ? "bg-nuit text-cauri" : "bg-papier",
+            ]}>
+              <span class="cyc-icon grid h-[60px] w-[60px] place-items-center rounded-full bg-cauri"><img src={f.icon.src} alt="" width="46" height="46" /></span>
+              <h3 class="m-0 mt-1 font-display text-[1.4rem] leading-[1.05] font-bold tracking-tight">{f.title}</h3>
+              <p class="m-0 mt-auto text-[15px] leading-snug opacity-85">{f.quote}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <!-- The values. -->
+  <section class="bg-nuit text-cauri">
+    <div class="mx-auto flex max-w-[1280px] flex-col gap-12 px-6 py-24 @5xl:px-10 @5xl:py-32">
+      <div class="grid gap-6 @5xl:grid-cols-[1fr_1fr] @5xl:items-end">
+        <h2 class="display-light m-0 text-[clamp(2.6rem,5cqi,4.4rem)]" data-reveal>{t.values.a}<b class="text-solaire">{t.values.b}</b></h2>
+        <p class="m-0 text-[1.125rem] leading-relaxed text-lilas" data-reveal>{t.values.p}</p>
+      </div>
+      <ul class="m-0 grid list-none gap-4 p-0 @3xl:grid-cols-2 @5xl:grid-cols-4" data-cycle>
+        {t.values.items.map(([name, line, proof], i) => (
+          <li data-reveal style={`--i:${i}`} class="flex">
+            <div class:list={["cyc-card flex w-full flex-col gap-4 rounded-[28px] p-7 text-nuit", i === 3 ? "bg-solaire" : "bg-cauri"]}>
+              <h3 class="m-0 font-display text-[2.1rem] font-bold tracking-tight">{name}</h3>
+              <p class="m-0 text-[1.0625rem] leading-snug font-medium">{line}</p>
+              <p class:list={["m-0 mt-auto border-t pt-4 text-[15px] leading-relaxed opacity-80", i === 3 ? "border-nuit/25" : "border-trait"]}>{proof}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <!-- The call: where one sells. -->
+  <section class="grid bg-cauri text-nuit @5xl:grid-cols-[58%_42%]">
+    <div class="relative h-[520px] overflow-hidden @5xl:h-auto @5xl:min-h-[640px]">
+      <Image src={boutiquier} alt={t.call.alt} widths={[600, 1000]} sizes="(min-width: 1024px) 58vw, 100vw" class="absolute inset-0 h-full w-full object-cover" />
+      <div class="absolute right-6 bottom-6 grid h-[250px] w-[250px] -rotate-6 place-items-center rounded-full bg-solaire text-center text-nuit shadow-lift [box-shadow:inset_0_0_0_7px_#14111B,inset_0_0_0_11px_#FF7A1F,inset_0_0_0_13px_#14111B,0_24px_50px_rgba(20,17,27,.45)] @5xl:right-12 @5xl:bottom-12 @5xl:h-[300px] @5xl:w-[300px]" data-reveal>
+        <span class="flex flex-col items-center gap-3">
+          <img src={symbol.src} alt="" width="40" height="40" />
+          <span class="font-display text-[1.9rem] leading-[0.92] font-extrabold tracking-tight @5xl:text-[2.25rem]">{t.call.sticker[0]}<br />{t.call.sticker[1]}</span>
+        </span>
+      </div>
+    </div>
+    <div class="flex flex-col justify-center gap-7 px-6 py-20 @5xl:px-16">
+      <h2 class="display m-0 text-[clamp(2.4rem,4.6cqi,4.2rem)]" data-reveal>{t.call.a}<br />{t.call.b}<span class="marker">Kayé.</span></h2>
+      <p class="m-0 text-[1.1875rem] leading-relaxed text-gris" data-reveal>{t.call.p[0]}<b class="num text-nuit">{PHONE}</b>{t.call.p[1]}</p>
+      <div class="flex flex-wrap items-center gap-6" data-reveal>
+        <a href={t.wa} class="btn btn-night">{t.call.open}</a>
+        <img src={qr.src} alt={t.call.qr} width="120" height="120" class="rounded-xl bg-papier p-2" />
+      </div>
+      <p class="m-0 text-[14px] text-gris" data-reveal>{t.call.demo}</p>
+    </div>
+  </section>
+
+  <SiteFooter lang={lang} />
+</div>
