@@ -226,6 +226,8 @@ async def merge(ctx: Ctx, replies: list[Reply]) -> list[Reply]:
         ctx.session.add(recap_pending)
         recap += "\n\n_Votre bilan suivra dès que c'est noté._"
     ask = "\n\nJe note ?" if len(proposals) == 1 else "\n\nJe note tout ?"
+    if not await queries.has_entries(ctx.session, ctx.shop.id):  # a first-timer may not see the buttons
+        ask += "\n👇 _Appuyez sur « Oui, noter » pour l'enregistrer._"
     return others + [Reply(recap + ask, buttons=confirm_buttons(pending_id), kind="proposal")]
 
 

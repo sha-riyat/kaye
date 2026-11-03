@@ -13,7 +13,18 @@ from sqlmodel import select
 from app import language
 from app.agent import actions
 from app.agent.actions import Ctx
-from app.agent.prompts import AFTER_NAME, DEMO_NOTICE, WELCOME
+from app.agent.prompts import (
+    AFTER_NAME,
+    DEMO_CANCEL,
+    DEMO_DONE,
+    DEMO_RECAP,
+    DEMO_SALE,
+    HELP,
+    NAME_AGAIN,
+    START_PHOTO,
+    START_VOICE,
+    WELCOME,
+)
 from app.agent.reply import Reply
 from app.db import ledger, queries
 from app.db.models import Contact, Entry, EntryKind, EntrySource, Media, PendingStatus, Receipt, Shop
@@ -46,9 +57,19 @@ UNSUPPORTED_REPLY = "Pour le moment, je comprends les messages écrits, les voca
 EXPIRED_REPLY = "Cette proposition n'est plus valable (plus de 30 minutes). Redites-la-moi, je la refais."
 QUOTA_REPLY = "Vous avez beaucoup écrit aujourd'hui : je reprends demain. À très vite !"
 BUDGET_REPLY = "Je suis très sollicité en ce moment. Pouvez-vous réessayer un peu plus tard ?"
-NAME_FIRST_REPLY = "Avant de commencer : comment s'appelle votre boutique ? (quelques mots suffisent)"
 SHOP_NAME_MAX = 60
 GREETINGS = {"bonjour", "bonsoir", "salut", "hello", "coucou", "ok", "oui", "merci", "bjr", "slt", "yo", "hi"}
+HELP_WORDS = {"aide", "help", "menu", "exemples", "exemple", "comment ca marche"}
+PROFILE_NAME = "name:profile"  # « use my WhatsApp name » while the shop has none
+# Right after the name: the three ways in, the first one leading to a receipt within seconds.
+START_BUTTONS = [("start:demo", "Essayer un exemple"), ("start:voice", "🎤 Faire un vocal"),
+                 ("start:photo", "📸 Photo du cahier")]  # fmt: skip
+
+
+def name_buttons(profile_name: str | None) -> list[tuple[str, str]]:
+    """A one-tap answer to « which name? »: the name on the merchant's WhatsApp profile."""
+    name = (profile_name or "").strip()
+    return [(PROFILE_NAME, name[:20])] if name and len(name) <= SHOP_NAME_MAX else []
 
 
 @dataclass
@@ -144,10 +165,14 @@ async def _respond(session, svc: Services, msg: InboundMessage, user, shop: Shop
             return [language.choose()], False
         shop.language = picked
         session.add(shop)
-        return [Reply(WELCOME), Reply(DEMO_NOTICE)], False
+        return [Reply(WELCOME, buttons=name_buttons(msg.profile_name))], False
 
     if not shop.name:
-        return await _name_shop(session, shop, text if msg.type in ("text", "audio") else None), False
+        if msg.button_id == PROFILE_NAME:
+            text = msg.profile_name
+        elif msg.type not in ("text", "audio"):
+            text = None
+        return await _name_shop(session, shop, text, msg.profile_name), False
 
     ctx = Ctx(session=session, shop=shop, user=user, wamid=msg.wamid, source=source, media=svc.media)
     if voice is not None:
@@ -196,8 +221,11 @@ async def _handle(ctx: Ctx, svc: Services, msg: InboundMessage, text: str | None
         return replies
 
     if text:
-        if queries.norm(text).strip(" ?!.") in language.ASK_AGAIN:
+        said = queries.norm(text).strip(" ?!.")
+        if said in language.ASK_AGAIN:
             return [language.choose()]
+        if said in HELP_WORDS:
+            return [Reply(HELP)]  # no model call
         if (blocked := await _guard(ctx, svc)) is not None:
             return [blocked]
         if msg.type == "audio" and media_bytes:
@@ -216,13 +244,13 @@ async def _guard(ctx: Ctx, svc: Services) -> Reply | None:
     return None
 
 
-async def _name_shop(session, shop: Shop, text: str | None) -> list[Reply]:
+async def _name_shop(session, shop: Shop, text: str | None, profile_name: str | None) -> list[Reply]:
     name = (text or "").strip().strip("«»\"'").strip()
     if not name or len(name) > SHOP_NAME_MAX or "\n" in name or queries.norm(name).strip(" !.") in GREETINGS:
-        return [Reply(NAME_FIRST_REPLY)]
+        return [Reply(NAME_AGAIN, buttons=name_buttons(profile_name))]
     shop.name = name
     session.add(shop)
-    return [Reply(AFTER_NAME.format(name=name))]
+    return [Reply(AFTER_NAME.format(name=name), buttons=list(START_BUTTONS))]
 
 
 async def _store_media(
@@ -301,6 +329,16 @@ async def _on_button(ctx: Ctx, svc: Services, button_id: str) -> list[Reply]:
         ctx.shop.language = picked
         ctx.session.add(ctx.shop)
         return [Reply(language.SET[picked])]
+    if action == "start":
+        if rest == "voice":
+            return [Reply(START_VOICE)]
+        if rest == "photo":
+            return [Reply(START_PHOTO)]
+        return [Reply(DEMO_RECAP, buttons=[("demo:ok", "Oui, noter"), ("demo:no", "Annuler")], kind="proposal")]
+    if action == "demo":
+        if rest != "ok":
+            return [Reply(DEMO_CANCEL)]
+        return [await _demo_receipt(ctx, svc), Reply(DEMO_DONE)]
     if action == "rem":
         from app.db.models import Contact
 
@@ -498,6 +536,25 @@ DRAWERS = {
     "quittance": _draw_settlement,
     "stock": _draw_stock,
 }
+
+
+async def _demo_receipt(ctx: Ctx, svc: Services) -> Reply:
+    """The receipt of the onboarding's example sale, in the merchant's name. Nothing is written: the
+    entry only exists to be drawn, and the receipt is marked as an example."""
+    d = DEMO_SALE
+    total = d["quantity"] * d["unit_price"]
+    line = {"product": d["product"], "quantity": d["quantity"], "unit": None, "unit_price": d["unit_price"],
+            "total": total}  # fmt: skip
+    entry = Entry(id=0, shop_id=ctx.shop.id, kind=EntryKind.SALE, amount=total, debt_delta=total - d["paid"],
+                  lines=[line])  # fmt: skip
+    try:
+        data = receipt_data(await _shop_card(ctx.session, svc, ctx.shop), entry, 0, d["customer"], ctx.now)
+        data.update(number="EXEMPLE", code="exemple, rien n'est noté")
+        png = await render_png("recu_ticket.html.j2", data, extra_height(1))
+    except (RenderError, OSError):
+        log.exception("demo receipt rendering failed for shop %s", ctx.shop.id)
+        return Reply("Je n'ai pas pu dessiner le reçu d'exemple, mais tout est prêt pour une vraie vente.")
+    return Reply(f"Reçu pour {d['customer']}", image=png)
 
 
 async def _receipt_reply(ctx: Ctx, svc: Services, entry_id: int) -> Reply:

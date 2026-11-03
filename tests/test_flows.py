@@ -6,6 +6,7 @@ scripted so the tests check what the code does with its answers: resolve, comput
 
 import json
 import os
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -18,7 +19,7 @@ from app.agent.reply import Reply
 from app.config import Settings
 from app.db import ledger
 from app.db.engine import Database
-from app.db.models import Contact, Entry, PendingAction, Product, Shop
+from app.db.models import Contact, Entry, PendingAction, Product, Receipt, Shop
 from app.models_client import Usage
 from app.router import handle_message
 from app.services import Services
@@ -195,13 +196,81 @@ async def test_onboarding_names_the_shop(db, models):
     first = await c.send(text="Bonjour")
     assert first[0].buttons == [("lang:fr", "Français"), ("lang:en", "English")]
     welcome = await c.tap("lang:fr")
-    assert "Comment s'appelle votre boutique" in welcome[0].text
-    assert "démo" in welcome[1].text
+    assert len(welcome) == 1
+    assert "Quel nom je mets sur vos reçus" in welcome[0].text and "démo" in welcome[0].text
+    assert welcome[0].buttons == [("name:profile", "Afi")]  # the WhatsApp profile name, one tap
     named = await c.send(text="Chez Afi")
-    assert "Chez Afi" in named[0].text and "photo de votre cahier" in named[0].text
+    assert "Chez Afi" in named[0].text
+    assert [b for b, _ in named[0].buttons] == ["start:demo", "start:voice", "start:photo"]
     async with db.session() as s:
         assert (await s.exec(select(Shop))).one().name == "Chez Afi"
     assert models.calls == []  # onboarding never costs a model call
+
+
+async def test_the_profile_name_button_names_the_business(db, models):
+    wa = FakeWA()
+    c = Chat(Services(Settings(_env_file=None), wa, FakeTranscriber(), db, Agent(models), None), models, wa)
+    await c.send(text="Bonjour")
+    await c.tap("lang:fr")
+    named = await c.tap("name:profile")
+    assert "Afi" in named[0].text
+    async with db.session() as s:
+        assert (await s.exec(select(Shop))).one().name == "Afi"
+
+
+async def test_the_example_sale_sends_a_receipt_and_writes_nothing(chat, db, rendered):
+    recap = await chat.tap("start:demo")
+    assert "Vente à Ama" in recap[0].text and recap[0].buttons[0] == ("demo:ok", "Oui, noter")
+    done = await chat.tap("demo:ok")
+    assert done[0].image and "À vous" in done[1].text
+    template, data = rendered[-1]
+    assert template == "recu_ticket.html.j2" and data["number"] == "EXEMPLE" and data["due"] == 8_000
+    assert data["shop"]["name"] == "Chez Afi"
+    async with db.session() as s:
+        assert (await s.exec(select(Entry))).all() == []
+        assert (await s.exec(select(Receipt))).all() == []
+    assert chat.models.calls == []
+
+
+async def test_the_voice_and_photo_buttons_explain_and_help_lists_everything(chat):
+    assert "micro" in (await chat.tap("start:voice"))[0].text
+    assert "photo" in (await chat.tap("start:photo"))[0].text
+    help_ = await chat.send(text="aide")
+    assert "Qui me doit" in help_[0].text and "crée mon logo" in help_[0].text
+    assert chat.models.calls == []
+
+
+async def test_a_first_timer_is_shown_where_to_tap_until_the_first_entry(chat):
+    first = await chat.say("vente", SALE)
+    assert "Appuyez sur « Oui, noter »" in first[0].text
+    await chat.tap(first[0].buttons[0][0])
+    second = await chat.say("vente", SALE)
+    assert "Appuyez sur" not in second[0].text
+
+
+async def test_a_silent_newcomer_is_nudged_once(db, models, monkeypatch):
+    from app import jobs
+    from app.db import queries
+
+    wa = FakeWA()
+    svc = Services(Settings(_env_file=None), wa, FakeTranscriber(), db, Agent(models), None)
+    named = Chat(svc, models, wa, sender="22890000002")
+    await named.send(text="Bonjour")
+    await named.tap("lang:fr")
+    await named.send(text="Ben boutique")
+    unnamed = Chat(svc, models, wa, sender="22990000003")
+    await unnamed.send(text="Bonjour")
+    await unnamed.tap("lang:fr")
+    later = datetime.now(UTC) + timedelta(hours=2)
+    monkeypatch.setattr(queries, "utcnow", lambda: later)
+    wa.sent = []
+    await jobs.run_hourly(svc)
+    texts = [m.text for m in wa.sent]
+    assert len(texts) == 2
+    assert any("J'ai vendu 2 savons" in t for t in texts) and any("Quel nom" in t for t in texts)
+    wa.sent = []
+    await jobs.run_hourly(svc)
+    assert wa.sent == []  # once only
 
 
 async def test_a_blocked_number_gets_no_reply_and_no_shop(db, models):
@@ -221,7 +290,7 @@ async def test_an_overlong_shop_name_is_asked_again(db, models):
     await c.send(text="Bonjour")
     await c.tap("lang:fr")
     again = await c.send(text="x" * 200)
-    assert "comment s'appelle votre boutique" in again[0].text.lower()
+    assert "quel nom je mets sur vos reçus" in again[0].text.lower()
 
 
 # --- sales ---
@@ -416,7 +485,7 @@ async def test_a_delivery_is_one_recap_with_one_set_of_buttons(chat, db):
     assert len(replies) == 1
     recap = replies[0].text
     assert "Achat chez Koffi" in recap and "06/11/2026" in recap and "0 → *20*" in recap
-    assert recap.endswith("Je note tout ?") and len(replies[0].buttons) == 3
+    assert "\n\nJe note tout ?" in recap and len(replies[0].buttons) == 3
     done = await chat.tap(replies[0].buttons[0][0])
     assert len(done) == 1 and done[0].text.count("C'est noté") == 1
     assert "• Vous devez 180 000 FCFA à Koffi" in done[0].text and "• Stock de riz : *20*" in done[0].text
@@ -795,7 +864,7 @@ async def test_a_greeting_is_never_taken_as_the_shop_name(db, models):
     await c.send(text="Bonjour")
     await c.tap("lang:fr")
     again = await c.send(text="Salut !")
-    assert "comment s'appelle votre boutique" in again[0].text.lower()
+    assert "quel nom je mets sur vos reçus" in again[0].text.lower()
 
 
 # --- documents drawn as images ---
@@ -933,11 +1002,11 @@ async def test_english_is_chosen_first_and_replies_are_translated(db, models):
     c = Chat(Services(Settings(_env_file=None), wa, FakeTranscriber(), db, Agent(models), None), models, wa)
     choice = await c.send(text="Hello")
     assert "Which language" in choice[0].text and models.calls == []
-    models.say('{"texts": ["Hello! I am *Kayé* 👋 What is the name of your shop?", "_Demo mode._"]}')
+    models.say('{"texts": ["Hello! I am *Kayé* 👋 What name goes on your receipts?", "Afi"]}')
     welcome = await c.send(text="English")  # typed instead of tapped
-    assert welcome[0].text.startswith("Hello! I am *Kayé*") and welcome[1].text == "_Demo mode._"
+    assert welcome[0].text.startswith("Hello! I am *Kayé*") and welcome[0].buttons == [("name:profile", "Afi")]
     assert models.calls[-1]["response_format"]["json_schema"]["name"] == "Translation"
-    models.say('{"texts": ["*Afi Shop* is ready! ✅"]}')
+    models.say('{"texts": ["*Afi Shop* is ready! ✅", "Try an example", "🎤 Voice note", "📸 Notebook photo"]}')
     await c.send(text="Afi Shop")
     models.say('{"texts": ["*Today\'s summary*\\nNo operation recorded."]}')
     summary = await c.send(text="summary")  # English shortcut: the only model call is the translation

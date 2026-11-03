@@ -53,21 +53,62 @@ def vision_prompt(now: datetime) -> str:
 Si ce n'est rien de tout cela, réponds en une phrase pour demander ce que c'est. Montants en FCFA entiers."""
 
 
+# --- onboarding: a name, then the first receipt within seconds ---
+
 WELCOME = """Bonjour ! Je suis *Kayé* 👋
-Je tiens le cahier de votre boutique, ici dans WhatsApp : ventes, crédits, stock, dépenses, fournisseurs.
+Je tiens les comptes de votre commerce, ici dans WhatsApp.
 
-Comment s'appelle votre boutique ?"""
+Quel nom je mets sur vos reçus ?
+_(votre boutique, votre page, votre activité…)_
 
-DEMO_NOTICE = "_Mode démo : utilisez des données fictives pour essayer._"
+_Mode démo : utilisez des données fictives pour essayer._"""
 
-AFTER_NAME = """Parfait, *{name}* est prête ! ✅
+NAME_AGAIN = "Quel nom je mets sur vos reçus ? Quelques mots suffisent _(votre boutique, votre page, votre activité…)_."
 
-Vous pouvez me dire, par vocal ou par écrit :
-• « J'ai vendu 3 sacs de riz à Ama, elle me doit 5 000 »
-• « J'ai reçu 20 sacs de riz de Koffi, je paie vendredi »
-• « Transport 3 500 »
-• « Qui me doit ? » · « Bilan » · « Il reste combien d'huile ? »
+AFTER_NAME = """C'est prêt, *{name}* ✅
 
-Ou envoyez-moi une *photo de votre cahier* de crédits : je recopie pour vous. Une photo de vos étagères : je compte le stock.
-Pas encore de logo ? Écrivez « crée mon logo ».
-Chaque chose est notée seulement après votre « Oui »."""
+Par quoi on commence ?"""
+
+START_VOICE = """Maintenez le micro 🎤 et parlez comme au comptoir. Par exemple :
+« J'ai vendu 2 savons à 500, et Kodjo me doit encore 1 000. »
+
+Je vous montre ce que j'ai compris, et je ne note rien avant votre « Oui »."""
+
+START_PHOTO = """Prenez en photo une page de votre cahier (ventes ou crédits), bien à plat et éclairée, et envoyez-la ici 📸
+
+Je recopie chaque ligne, je vous montre le total, et je ne note rien avant votre « Oui »."""
+
+# The example sale of the onboarding: shown, confirmed, and drawn as a receipt, but never written.
+DEMO_SALE = {"customer": "Ama", "product": "pagne", "quantity": 2, "unit_price": 9000, "paid": 10000}
+DEMO_RECAP = """Imaginons que vous me disiez :
+« J'ai vendu 2 pagnes à Ama, 18 000. Elle a donné 10 000. »
+
+*Vente à Ama*
+2 pagnes × 9 000 = 18 000
+Total : *18 000 FCFA*
+Payé : 10 000 · Reste dû : *8 000*
+
+👇 Appuyez sur *Oui, noter* pour voir le reçu."""
+DEMO_DONE = """Voilà le reçu que votre client reçoit ↗ _(c'est un exemple : rien n'est noté)_
+
+À vous : dites-moi une vraie vente, par vocal ou par écrit. Écrivez « aide » pour voir tout ce que je sais faire."""
+DEMO_CANCEL = "D'accord. Dites-moi une vraie vente quand vous voulez, par vocal ou par écrit."
+
+HELP = """Voici ce que je sais faire, par vocal ou par écrit :
+• « J'ai vendu 2 pagnes à Ama, elle me doit 8 000 »
+• « Koffi m'a livré 30 chargeurs à 3 500, je paie vendredi »
+• « Transport 2 000 »
+• « Ama a payé 8 000 » ou une capture de paiement mobile money
+• « Qui me doit ? » · « Bilan » · « Stock »
+
+📸 Une photo de votre cahier : je recopie les ventes ou les crédits.
+📸 Une photo de vos étagères : je compte le stock.
+🎨 Pas encore de logo ? Écrivez « crée mon logo ».
+Rien n'est noté avant votre « Oui »."""
+
+# One nudge, once, in the 24 h after sign-up, to people who stopped before their first operation.
+NUDGE_NAME = """Petite question pour commencer 🙂
+Quel nom je mets sur vos reçus ? _(votre boutique, votre page, votre activité…)_"""
+NUDGE_FIRST = """Petite idée pour commencer 🙂
+Envoyez-moi simplement : « J'ai vendu 2 savons à 500 »
+_ou appuyez sur un bouton :_"""

@@ -13,6 +13,7 @@ from app.db.models import (
     AppUser,
     Contact,
     ContactKind,
+    Entry,
     MessageLog,
     ModelCall,
     PendingAction,
@@ -62,6 +63,29 @@ async def create_shop_with_owner(session: AsyncSession, wa_id: str, name: str | 
 
 async def all_shops(session: AsyncSession) -> list[Shop]:
     return list((await session.exec(select(Shop).where(Shop.name != ""))).all())
+
+
+async def has_entries(session: AsyncSession, shop_id: int) -> bool:
+    return (await session.exec(select(Entry.id).where(Entry.shop_id == shop_id).limit(1))).first() is not None
+
+
+async def new_owners(session: AsyncSession, signed_up_after: datetime, signed_up_before: datetime) -> list[AppUser]:
+    """Owners who wrote for the first time in this window: still inside WhatsApp's 24 h window."""
+    query = select(AppUser).where(
+        AppUser.role == "owner", AppUser.created_at >= signed_up_after, AppUser.created_at < signed_up_before
+    )
+    return list((await session.exec(query)).all())
+
+
+async def last_said_at(session: AsyncSession, user_id: int) -> datetime | None:
+    """When the merchant last wrote after onboarding (onboarding messages are not logged)."""
+    query = select(func.max(MessageLog.created_at)).where(MessageLog.user_id == user_id, MessageLog.role == "merchant")
+    return (await session.exec(query)).first()
+
+
+async def was_nudged(session: AsyncSession, shop_id: int) -> bool:
+    query = select(PendingAction.id).where(PendingAction.shop_id == shop_id, PendingAction.kind == "nudge")
+    return (await session.exec(query.limit(1))).first() is not None
 
 
 async def owner_of(session: AsyncSession, shop_id: int) -> AppUser | None:
@@ -212,8 +236,6 @@ async def lower_stock_if_tracked(session: AsyncSession, shop_id: int, name: str,
 
 async def quantities_sold(session: AsyncSession, shop_id: int, since: datetime) -> dict[str, int]:
     """Units sold per product since a date, keyed like products are matched (reversals net out)."""
-    from app.db.models import Entry
-
     query = select(Entry.lines, Entry.amount).where(
         Entry.shop_id == shop_id, Entry.kind == "sale", Entry.created_at >= since
     )
