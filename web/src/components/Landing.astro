@@ -52,7 +52,7 @@ const shop = t.shop.items.map(([title, quote], i) => ({ title, quote, ...shopLoo
 
   <!-- Cover: the brand book's cover, made a page. -->
   <header class="relative overflow-hidden">
-    <div class="relative z-10 @5xl:w-[56%]"><SiteNav lang={lang} tone="nuit" /></div>
+    <SiteNav lang={lang} half />
     <div class="relative grid @5xl:min-h-[760px] @5xl:grid-cols-[56%_44%]">
       <div class="relative z-10 flex flex-col gap-8 px-6 pt-8 pb-14 @5xl:px-10 @5xl:pt-16 @5xl:pb-20">
         <h1 class="display-light m-0 text-[clamp(3.4rem,9cqi,8.4rem)]">{t.hero.a}<br /><b class="text-solaire">{t.hero.b}</b></h1>
