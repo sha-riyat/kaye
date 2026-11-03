@@ -1,6 +1,6 @@
 """Render the ticket documents the website shows, from the same templates and fixtures as the app.
 
-    uv run python -m scripts.web_tickets        # writes web/src/assets/tickets/*.png
+uv run python -m scripts.web_tickets        # writes web/src/assets/tickets/*.png
 """
 
 from pathlib import Path
@@ -18,7 +18,9 @@ LOW = [{"name": "chargeurs USB-C", "stock": 3}, {"name": "mèches", "stock": 6}]
 
 
 def _receipt() -> dict:
-    lines = fx._lines(("Pagne wax", "6 yards", 2, 9_000), ("Mèches", "2 paquets", 2, 4_500), ("Chargeur USB-C", "", 1, 6_000))
+    lines = fx._lines(
+        ("Pagne wax", "6 yards", 2, 9_000), ("Mèches", "2 paquets", 2, 4_500), ("Chargeur USB-C", "", 1, 6_000)
+    )
     total = sum(line["total"] for line in lines)
     return {**fx.receipt(), "shop": SHOP, "lines": lines, "total": total, "due": total - 25_000}
 
@@ -42,7 +44,12 @@ FIXTURES = {
     **{k: _shop(v) for k, v in fx.FIXTURES.items()},
     "recu": _receipt,
     "stock": _stock,
-    "quittance": lambda: {**fx.settlement(), "shop": SHOP, "method": "mobile money", "reference": "MM261102.0915.B07781"},
+    "quittance": lambda: {
+        **fx.settlement(),
+        "shop": SHOP,
+        "method": "mobile money",
+        "reference": "MM261102.0915.B07781",
+    },
     "bilan": lambda: {**fx.daily_summary(), "shop": SHOP, "low_stock": LOW},
     "bilan_semaine": lambda: {**fx.weekly_summary(), "shop": SHOP, "low_stock": LOW},
 }
