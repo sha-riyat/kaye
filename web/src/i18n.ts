@@ -16,7 +16,6 @@ export const copy = {
     },
     nav: { how: "Comment ça marche", promise: "La promesse", privacy: "Confidentialité", write: "Écrire à Kayé", home: "Kayé, accueil", label: "Navigation principale" },
     hero: {
-      where: "Lomé · Togo · pour toute la sous-région",
       a: "Dites-le.",
       b: "Kayé le note.",
       sub: "Votre cahier de boutique, dans WhatsApp : ventes, crédits, stock, dépenses. À la voix.",
@@ -116,7 +115,6 @@ export const copy = {
     },
     nav: { how: "How it works", promise: "The promise", privacy: "Privacy", write: "Message Kayé", home: "Kayé, home", label: "Main navigation" },
     hero: {
-      where: "Lomé · Togo · for the whole region",
       a: "Say it.",
       b: "Kayé writes it down.",
       sub: "Your shop's notebook, in WhatsApp: sales, credit, stock, expenses. By voice.",
