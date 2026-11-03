@@ -23,3 +23,6 @@ supabase/.temp/
 .idea/
 .vscode/
 .DS_Store
+
+# Private: the demo video script stays on this machine
+docs/video-script.md
