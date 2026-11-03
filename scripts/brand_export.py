@@ -239,11 +239,11 @@ ARCH_TEXT = {
         "read": "question",
         "d1": (
             "Supabase Postgres",
-            "ledger, contacts, stock, pending actions,<br>cost of every model call · row level security",
+            "ledger, contacts, stock, pending actions,<br>a log of every model call · row level security",
         ),
         "d2": ("Cloudflare R2", "voice notes, photos,<br>receipts, logos (private)"),
         "d3": ("Modal Cron · hourly", "evening summary at each shop's hour,<br>supplier reminders the day before"),
-        "k1": ("≈ $2.20", "model cost per merchant per month"),
+        "k1": ("4", "Meta models, inside WhatsApp"),
         "k2": ("0", "writes without « Oui »"),
     },
     "fr": {
@@ -266,14 +266,14 @@ ARCH_TEXT = {
         "read": "question",
         "d1": (
             "Supabase Postgres",
-            "cahier, clients, stock, actions en attente,<br>coût de chaque appel · sécurité par ligne",
+            "cahier, clients, stock, actions en attente,<br>journal de chaque appel · sécurité par ligne",
         ),
         "d2": ("Cloudflare R2", "vocaux, photos,<br>reçus, logos (privé)"),
         "d3": (
             "Modal Cron · chaque heure",
             "bilan du soir à l'heure de la boutique,<br>rappels fournisseurs la veille",
         ),
-        "k1": ("≈ 2,20 $", "de modèles par commerçant et par mois"),
+        "k1": ("4", "modèles Meta, dans WhatsApp"),
         "k2": ("0", "écriture sans « Oui »"),
     },
 }

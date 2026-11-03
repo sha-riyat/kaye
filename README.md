@@ -163,17 +163,15 @@ uv run python -m scripts.replay tests/fixtures/conversations/demo.txt --db postg
 
 ## Meta models used
 
-| Model | Used for | Measured cost |
-| --- | --- | --- |
-| **Muse Spark 1.3** | Understands each message and picks typed tools (`reasoning_effort=minimal`); reads handwritten pages and mobile money screenshots (`low`, on a cleaned-up photo) | ≈ $0.0045 per message · $0.005–0.01 per page |
-| **Muse Voice Transcribe 1.0** | French voice notes, biased toward market words (tas, bol, sac, T-Money, Flooz…) | $0.18 per audio hour |
-| **SAM 3.1** | Counts items on a stock photo | $0.0025 per photo |
-| **Muse Image 1.0** | Draws shop logos | $0.01 per logo |
+| Model | Used for |
+| --- | --- |
+| **Muse Spark 1.3** | Understands each message and picks typed tools (`reasoning_effort=minimal`); reads handwritten pages and mobile money screenshots (`low`, on a cleaned-up photo) |
+| **Muse Voice Transcribe 1.0** | French voice notes, biased toward market words (tas, bol, sac, T-Money, Flooz…) |
+| **SAM 3.1** | Counts items on a stock photo |
+| **Muse Image 1.0** | Draws shop logos |
 
-Every call is logged with its cost; `uv run python -m scripts.costs` prints the cost per active
-merchant-day. A merchant sending 15 messages a day, half of them short voice notes, costs about
-**$2.20 a month** (≈ 1,300 FCFA). Shortcuts and buttons (« bilan », « stock », « qui me doit ? »)
-use no model at all. `scripts/handwriting_eval.py` compares ways of reading handwriting on any photos.
+Shortcuts and buttons (« bilan », « stock », « qui me doit ? ») use no model at all.
+`scripts/handwriting_eval.py` compares ways of reading handwriting on any photos.
 
 **Key files:** `app/agent/` (prompts, tools, the agent loop) · `app/db/ledger.py` (the only place
 entries are created) · `app/documents/templates/` (the ticket family) · `app/receipts.py`

@@ -161,18 +161,16 @@ uv run python -m scripts.replay tests/fixtures/conversations/demo.txt --db postg
 
 ## Les modèles Meta utilisés
 
-| Modèle | Rôle | Coût mesuré |
-| --- | --- | --- |
-| **Muse Spark 1.3** | Comprend chaque message et choisit les outils (`reasoning_effort=minimal`) ; lit les pages manuscrites et les captures mobile money (`low`, sur une photo nettoyée) | ≈ 0,0045 $ par message · 0,005 à 0,01 $ par page |
-| **Muse Voice Transcribe 1.0** | Les vocaux en français, orientés vers le vocabulaire du marché (tas, bol, sac, T-Money, Flooz…) | 0,18 $ par heure d'audio |
-| **SAM 3.1** | Compte les articles sur une photo de stock | 0,0025 $ par photo |
-| **Muse Image 1.0** | Dessine les logos des boutiques | 0,01 $ par logo |
+| Modèle | Rôle |
+| --- | --- |
+| **Muse Spark 1.3** | Comprend chaque message et choisit les outils (`reasoning_effort=minimal`) ; lit les pages manuscrites et les captures mobile money (`low`, sur une photo nettoyée) |
+| **Muse Voice Transcribe 1.0** | Les vocaux en français, orientés vers le vocabulaire du marché (tas, bol, sac, T-Money, Flooz…) |
+| **SAM 3.1** | Compte les articles sur une photo de stock |
+| **Muse Image 1.0** | Dessine les logos des boutiques |
 
-Chaque appel est enregistré avec son coût ; `uv run python -m scripts.costs` affiche le coût par jour
-d'activité d'un commerçant. Un commerçant qui envoie 15 messages par jour, dont la moitié en courts
-vocaux, coûte environ **2,20 $ par mois** (≈ 1 300 FCFA). Les raccourcis et les boutons (« bilan »,
-« stock », « qui me doit ? ») n'utilisent aucun modèle. `scripts/handwriting_eval.py` compare les façons
-de lire l'écriture manuscrite sur n'importe quelles photos.
+Les raccourcis et les boutons (« bilan », « stock », « qui me doit ? ») n'utilisent aucun modèle.
+`scripts/handwriting_eval.py` compare les façons de lire l'écriture manuscrite sur n'importe quelles
+photos.
 
 **Fichiers clés :** `app/agent/` (consignes, outils, boucle de l'agent) · `app/db/ledger.py` (le seul
 endroit où naissent les écritures) · `app/documents/templates/` (la famille ticket) · `app/receipts.py`

@@ -19,7 +19,7 @@ Muse Voice Transcribe handles French voice notes, Muse Spark reads handwritten n
 T-Money/Flooz screenshots, SAM 3.1 counts stock on a shelf photo, and Muse Image draws a logo for
 shops that have none. Receipts go out as images the merchant forwards to the customer.
 
-Deployed on a real WhatsApp Business number: +228 71 67 45 79. Model cost ≈ $2 per merchant per month.
+Deployed on a real WhatsApp Business number: +228 71 67 45 79.
 
 **Built with:** Muse Spark 1.3, Muse Voice Transcribe 1.0, SAM 3.1, Muse Image 1.0, WhatsApp Cloud
 API, Modal, FastAPI, Supabase Postgres, Cloudflare R2.
